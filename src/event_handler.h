@@ -1,20 +1,28 @@
 /**
  */
 
+#ifndef SRC_EVENT_HANDLER_H_
+#define SRC_EVENT_HANDLER_H_
+
 #include "common/basics.h"
 #include "common/shared_ptr.h"
+#include "src/multiplexer.h"
+
+class Multiplexer;
 
 class EventHandler {
  public:
   EventHandler() {
-    Init();
+  }
+  EventHandler(shared_ptr<Multiplexer> plexer) : plexer_(plexer) {
   }
   virtual ~EventHandler() {}
-  void SetMultiplexer(shared_ptr<Multiplexer> plexer);
+  inline void SetMultiplexer(shared_ptr<Multiplexer> plexer) {
+    plexer_ = plexer;
+  }
   virtual void Process() = 0;
 
  protected:
-  virtual void Init() = 0;
 
  private:
   // Handler may use multiplexer to add/del event.
@@ -22,3 +30,5 @@ class EventHandler {
 
   DO_NOT_COPY_AND_ASSIGN(EventHandler);
 };
+
+#endif  // SRC_EVENT_HANDLER_H_

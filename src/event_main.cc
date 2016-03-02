@@ -3,9 +3,15 @@
 
 #include "src/event_loop.h"
 
+#include <iostream>
+using namespace std;
+
 int main() {
   EventLoop el;
-  vl.Start();
-  vl.Stop();
+  el.Start();
+  el.Stop();
+
+  cout << "DONE!" << endl;
+
   return 0;
 }
