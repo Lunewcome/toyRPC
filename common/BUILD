@@ -1,7 +1,6 @@
 cc_library (
   name = 'base',
   srcs = [
-    'dist.cc',
     'dtoa.cc',
     'flags.cc',
     'log.cc',

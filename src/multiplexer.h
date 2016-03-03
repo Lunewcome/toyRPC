@@ -6,27 +6,18 @@
 
 #include "common/basics.h"
 #include "common/shared_ptr.h"
-#include "src/event_handler.h"
+#include "src/event.h"
 
 #include <string>
 using std::string;
 
-enum EventType {
-  Read,
-  Write/*,
-  Timeout
-  */
-};
 
 class Multiplexer {
  public:
   Multiplexer() {}
   virtual ~Multiplexer() {}
-  virtual int AddEvent(int fd,
-                       EventType event_type,
-                       shared_ptr<EventHandler> handler) = 0;
-  virtual int DelEvent(int fd,
-                       EventType event_type) = 0;
+  virtual int AddEvent(shared_ptr<Event> e) = 0;
+  virtual int DelEvent(shared_ptr<Event> e) = 0;
   virtual void ProcessEvents() = 0;
 
  private:
