@@ -9,7 +9,9 @@
 #include "src/event.h"
 
 #include <string>
+#include <vector>
 using std::string;
+using std::vector;
 
 
 class Multiplexer {
@@ -19,6 +21,11 @@ class Multiplexer {
   virtual int AddEvent(shared_ptr<Event> e) = 0;
   virtual int DelEvent(shared_ptr<Event> e) = 0;
   virtual void ProcessEvents() = 0;
+
+ protected:
+  // indexed by fd in an event.
+  vector<shared_ptr<Event> > events_;
+  // time event?
 
  private:
 

@@ -22,9 +22,15 @@ class Epoll : public Multiplexer {
   }
   virtual void ProcessEvents() {
     Log::WriteToDisk(DEBUG, "epoll!");
+    // epoll_wait()...
+    // for () {
+    //   event->GetHandler()->Process();
+    // }
   }
 
  private:
+  void Init();
+
   int epoll_fd_;
 
   DO_NOT_COPY_AND_ASSIGN(Epoll);
