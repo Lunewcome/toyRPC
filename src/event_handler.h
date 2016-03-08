@@ -6,7 +6,6 @@
 
 #include "common/basics.h"
 #include "common/shared_ptr.h"
-#include "src/event.h"
 #include "src/event_type.h"
 #include "src/multiplexer.h"
 
@@ -22,7 +21,7 @@ class EventHandler {
   inline void SetMultiplexer(shared_ptr<Multiplexer> plexer) {
     plexer_ = plexer;
   }
-  virtual void Process(int fd, IOMask mask ) = 0;
+  virtual void Process(int fd, IOMask mask) = 0;
 
  protected:
 

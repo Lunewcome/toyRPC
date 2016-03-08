@@ -4,29 +4,17 @@
 #include "common/basics.h"
 #include "common/log.h"
 #include "common/shared_ptr.h"
-#include "src/event.h"
 #include "src/multiplexer.h"
 
 #include <sys/epoll.h>
-
 
 class Epoll : public Multiplexer {
  public:
   Epoll() {}
   virtual ~Epoll() {}
-  virtual int AddEvent(shared_ptr<Event> e) {
-    return 0;
-  }
-  virtual int DelEvent(shared_ptr<Event> e) {
-    return 0;
-  }
-  virtual void ProcessEvents() {
-    Log::WriteToDisk(DEBUG, "epoll!");
-    // epoll_wait()...
-    // for () {
-    //   event->GetHandler()->Process();
-    // }
-  }
+  virtual int AddEvent(shared_ptr<Event> e);
+  virtual int DelEvent(shared_ptr<Event> e);
+  virtual void ProcessEvents();
 
  private:
   void Init();
