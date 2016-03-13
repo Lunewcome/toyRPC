@@ -18,9 +18,16 @@ class Multiplexer {
  public:
   Multiplexer() {}
   virtual ~Multiplexer() {}
-  virtual int AddEvent(shared_ptr<Event> e) = 0;
+  virtual int AddEvent(const shared_ptr<Event>& e) = 0;
+  virtual int AddEvent(
+      int fd,
+      IOMask mask,
+      const shared_ptr<EventHandler>& read_handler,
+      const shared_ptr<EventHandler>& write_handler,
+      void* client_data) = 0;
   virtual int DelEvent(shared_ptr<Event> e) = 0;
-  virtual void ProcessEvents() = 0;
+  virtual int DelEvent(int fd, IOMask mask) = 0;
+  virtual int ProcessEvents() = 0;
 
  protected:
   // indexed by fd in an event.

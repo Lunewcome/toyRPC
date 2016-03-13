@@ -21,7 +21,9 @@ class EventHandler {
   inline void SetMultiplexer(shared_ptr<Multiplexer> plexer) {
     plexer_ = plexer;
   }
-  virtual void Process(int fd, IOMask mask) = 0;
+  virtual void Process(int fd,
+                       IOMask mask,
+                       void* client_data) = 0;
 
  protected:
 
