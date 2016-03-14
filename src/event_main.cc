@@ -17,7 +17,8 @@ int main(int argc, char** argv) {
   base::ParseCommandLineFlags(&argc, &argv, false);
 
   Log::Init(FLAGS_log_file, 0, 0);
-  EventLoop el;
+  shared_ptr<Multiplexer> plexer(new Epoll());
+  EventLoop el(plexer);
   el.Start();
   el.Stop();
 

@@ -10,7 +10,9 @@ DEFINE_string(multiplexer, "epoll", "epoll,select,poll");
 
 class EventLoop {
  public:
-  EventLoop() : stop_(0), plexer_(NULL) {
+  EventLoop(const shared_ptr<Multiplexer>& plexer)
+      : stop_(0),
+        plexer_(plexer) {
     Init();
   }
   ~EventLoop() {}
@@ -22,11 +24,7 @@ class EventLoop {
   inline void Stop() { stop_ = 1; }
 
  private:
-  void Init() {
-    if (FLAGS_multiplexer == "epoll") {
-      plexer_.reset(new Epoll());
-    }
-  }
+  void Init() {}
 
   int stop_;
   shared_ptr<Multiplexer> plexer_;

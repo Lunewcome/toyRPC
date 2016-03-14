@@ -37,6 +37,7 @@ int Epoll::ProcessEvents() {
     return 0;
   }
   if (ret == -1) {
+    Log::WriteToDisk(ERROR, "epoll err:%s", strerror(errno));
     return errno == EINTR ? 0 : -1;
   }
   for (int i = 0; i < ret; ++i) {
@@ -54,9 +55,15 @@ int Epoll::ProcessEvents() {
           Write,
           events_[fd]->GetClientData());
     }
-    if (ee.events &&EPOLLERR) {
+    if (ee.events & EPOLLERR) {
+      Log::WriteToDisk(ERROR,
+                       "Now EPOLLERR:%s",
+                       strerror(errno));
     }
-    if (ee.events &&EPOLLHUP) {
+    if (ee.events & EPOLLHUP) {
+      Log::WriteToDisk(ERROR,
+                       "Now EPOLLHUP:%s",
+                       strerror(errno));
     }
   }
   return ret;
@@ -84,7 +91,12 @@ int Epoll::AddEvent(
       epoll_event.events |= EPOLLOUT;
     }
   }
-  epoll_event.events |= mask;
+  if (mask & Read) {
+    epoll_event.events |= EPOLLIN;
+  }
+  if (mask & Write) {
+    epoll_event.events |= EPOLLOUT;
+  }
   int ret = epoll_ctl(epoll_fd_, op, fd, &epoll_event);
   if (ret) {
     Log::WriteToDisk(ERROR,
@@ -113,6 +125,7 @@ int Epoll::AddEvent(
     if ((fd & Write) && write_handler.get()) {
       events_[fd]->SetWriteHandler(write_handler);
     }
+    Log::WriteToDisk(DEBUG, "Add one event!");
     return ret;
   }
   // must be an error!
@@ -128,6 +141,7 @@ int Epoll::DelEvent(int fd, IOMask mask) {
   }
   struct epoll_event epoll_event;
   epoll_event.events = 0;
+  epoll_event.data.fd = fd;
   int io_mask = events_[fd]->GetMask();
   if (io_mask & Read && !(mask & Read)) {
     epoll_event.events |= EPOLLIN;
@@ -137,6 +151,11 @@ int Epoll::DelEvent(int fd, IOMask mask) {
   }
   int op = !epoll_event.events ?
       EPOLL_CTL_DEL : EPOLL_CTL_MOD;
+  if (op == EPOLL_CTL_DEL) {
+    Log::WriteToDisk(ERROR, "Delete event!");
+  } else {
+    Log::WriteToDisk(ERROR, "Mod event!");
+  }
   int ret = epoll_ctl(epoll_fd_,
                       op,
                       fd,

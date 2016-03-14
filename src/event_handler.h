@@ -13,12 +13,12 @@ class Multiplexer;
 
 class EventHandler {
  public:
-  EventHandler() {
-  }
-  EventHandler(shared_ptr<Multiplexer> plexer) : plexer_(plexer) {
-  }
+  EventHandler() {}
+  EventHandler(const shared_ptr<Multiplexer>& plexer)
+      : plexer_(plexer) {}
   virtual ~EventHandler() {}
-  inline void SetMultiplexer(shared_ptr<Multiplexer> plexer) {
+  inline void SetMultiplexer(
+      const shared_ptr<Multiplexer>& plexer) {
     plexer_ = plexer;
   }
   virtual void Process(int fd,
@@ -26,11 +26,10 @@ class EventHandler {
                        void* client_data) = 0;
 
  protected:
-
- private:
   // Handler may use multiplexer to add/del event.
   shared_ptr<Multiplexer> plexer_;
 
+ private:
   DO_NOT_COPY_AND_ASSIGN(EventHandler);
 };
 
