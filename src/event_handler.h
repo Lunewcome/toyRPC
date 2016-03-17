@@ -7,27 +7,23 @@
 #include "common/basics.h"
 #include "common/shared_ptr.h"
 #include "src/event_type.h"
-#include "src/multiplexer.h"
 
-class Multiplexer;
-
+class EventLoop;
 class EventHandler {
  public:
-  EventHandler() {}
-  EventHandler(const shared_ptr<Multiplexer>& plexer)
-      : plexer_(plexer) {}
+  EventHandler() : el_(NULL) {}
+  EventHandler(const shared_ptr<EventLoop>& el) : el_(el) {}
   virtual ~EventHandler() {}
-  inline void SetMultiplexer(
-      const shared_ptr<Multiplexer>& plexer) {
-    plexer_ = plexer;
+  inline void SetEventLoop(const shared_ptr<EventLoop>& el) {
+    el_ = el;
   }
   virtual void Process(int fd,
                        IOMask mask,
                        void* client_data) = 0;
 
  protected:
-  // Handler may use multiplexer to add/del event.
-  shared_ptr<Multiplexer> plexer_;
+  // Handler may use EventLoop to add/del event.
+  shared_ptr<EventLoop> el_;
 
  private:
   DO_NOT_COPY_AND_ASSIGN(EventHandler);

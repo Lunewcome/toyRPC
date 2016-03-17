@@ -6,14 +6,15 @@
 
 #include "common/basics.h"
 #include "common/shared_ptr.h"
-#include "src/event.h"
+#include "src/event_type.h"
 
 #include <string>
 #include <vector>
 using std::string;
 using std::vector;
 
-
+class Event;
+class EventHandler;
 class Multiplexer {
  public:
   Multiplexer() {}

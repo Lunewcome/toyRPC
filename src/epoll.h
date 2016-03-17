@@ -6,6 +6,7 @@
 #include "common/basics.h"
 #include "common/log.h"
 #include "common/shared_ptr.h"
+#include "src/event.h"
 #include "src/multiplexer.h"
 
 #include <sys/epoll.h>

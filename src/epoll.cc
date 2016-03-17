@@ -1,6 +1,7 @@
 #include "src/epoll.h"
 
 #include "common/flags.h"
+#include "src/event.h"
 
 #include <cerrno>
 #include <cstring>
