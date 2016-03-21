@@ -6,6 +6,7 @@
 
 #include "common/basics.h"
 #include "common/shared_ptr.h"
+#include "src/event_loop.h"
 #include "src/event_type.h"
 
 class EventLoop;
