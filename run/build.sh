@@ -1,6 +1,7 @@
-cd ../src
-blade build -p debug
+cd ..
+
+blade build src/server -p debug
+
 cd -
 
-cp ../blade-bin/src/el .
-cp ../blade-bin/src/test_net_client .
+cp ../blade-bin/src/server/server_test .

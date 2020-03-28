@@ -9,7 +9,6 @@
 #include <netinet/tcp.h>
 #include <unistd.h>
 
-
 int SetNonBlocking(int fd);
 int SetReuse(int fd);
 int SetNoDelay(int fd);
@@ -22,22 +21,13 @@ int CreateTcpClient(const string& host, int port) {
   srv_addr.sin_family = AF_INET;
   srv_addr.sin_port = htons(port);
   if (!inet_aton(host.c_str(), &srv_addr.sin_addr)) {
-    Log::WriteToDisk(ERROR,
-                     "inet_aton Fail:%s",
-                     strerror(errno));
     return -1;
   }
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
-    Log::WriteToDisk(ERROR,
-                     "socket err:%s",
-                     strerror(errno));
     return -1;
   }
   if (SetNonBlocking(sock) == -1) {
-    Log::WriteToDisk(ERROR,
-                     "Set nonblocking err:%s",
-                     strerror(errno));
     close(sock);
     return -1;
   }
@@ -46,31 +36,25 @@ int CreateTcpClient(const string& host, int port) {
                     sizeof(srv_addr));
   if (ret == -1) {
     if (errno != EINPROGRESS) {
-      Log::WriteToDisk(ERROR,
-                       "Fail to conn:%s",
-                       strerror(errno));
       close(sock);
       return -1;
     } else {
-      Log::WriteToDisk(INFO, "%s.", strerror(errno));
     }
   }
   return sock;
 }
 
-int CreateTcpServer(int port) {
+int CreateTcpServer(uint32_t port) {
   int sock = socket(PF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
-    Log::WriteToDisk(ERROR,
-                     "socket fail:%s",
-                     strerror(errno));
+    return -1;
   }
-  if (!SetNonBlocking(sock) &&
-      !SetReuse(sock) &&
-      !SetNoDelay(sock) &&
-      !Bind(sock, port) &&
-      !Listen(sock)) {
-    // break if any of these fails.
+  if (SetNonBlocking(sock) ||
+      SetReuse(sock) ||
+      SetNoDelay(sock) ||
+      Bind(sock, port) ||
+      Listen(sock)) {
+    return -1;
   }
   return sock;
 }
@@ -78,7 +62,6 @@ int CreateTcpServer(int port) {
 int SetNonBlocking(int fd) {
   int flg = fcntl(fd, F_GETFL);
   if (fcntl(fd, F_SETFL, flg|O_NONBLOCK) < 0) {
-    Log::WriteToDisk(ERROR, "Fail to set nonblock.");
     return -1;
   }
   return 0;
@@ -92,9 +75,6 @@ int SetReuse(int fd) {
                        &reuse,
                        sizeof(reuse));
   if (opt < 0) {
-    Log::WriteToDisk(ERROR,
-                     "set reuse fail:%s",
-                     strerror(errno));
   }
   return opt;
 }
@@ -106,9 +86,6 @@ int SetNoDelay(int fd) {
                  TCP_NODELAY,
                  &yes,
                  sizeof(yes)) == -1) {
-    Log::WriteToDisk(ERROR,
-                     "setsockopt TCP_NODELAY: %s",
-                     strerror(errno));
     return -1;
   }
   return 0;
@@ -123,9 +100,6 @@ int Bind(int fd, int port) {
                  (struct sockaddr*)&sock_addr,
                  sizeof(sock_addr));
   if (ret < 0) {
-    Log::WriteToDisk(ERROR,
-                     "Fail to bind:%s",
-                     strerror(errno));
     return -1;
   }
   return 0;
@@ -134,9 +108,6 @@ int Bind(int fd, int port) {
 int Listen(int fd) {
   int ret = listen(fd, 5);
   if (ret < 0) {
-    Log::WriteToDisk(ERROR,
-                     "Fail to listen:%s",
-                     strerror(errno));
     return -1;
   }
   return 0;
@@ -151,16 +122,11 @@ int CheckConnection(int sock) {
                  &err,
                  &len) < 0 ){
     // close(sock);
-    Log::WriteToDisk(ERROR,
-                     "sock err:%s",
-                     strerror(errno));
     return -1;
   }
   if (!err) {
-    Log::WriteToDisk(INFO, "connection done!");
     return -1;
   } else {
-    Log::WriteToDisk(INFO, "connection not ok!");
     return 0;
   }
 }

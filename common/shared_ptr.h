@@ -279,7 +279,7 @@ class weak_ptr {
 
   void swap(weak_ptr& ptr) {
     swap_weak_ptr(ptr_, ptr.ptr_);
-    swap_weak_ptr(control_block_, ptr.control_block_);
+    std::swap(control_block_, ptr.control_block_);
   }
 
   void reset() {
