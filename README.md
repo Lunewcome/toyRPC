@@ -1,2 +1,9 @@
-bothasy stands for "both asynchronous", which indeed means that
-both client and server work in a asynchronous way.
+项目起源：最早因为thrift客户端是阻塞式的，后来又见过一、二个人写网络库，觉得还有点意思，
+就萌生了写一个客户端和服务端都是非阻塞的rpc，这也就是很土的'both-asych'的来历。
+
+但是开了个头之后中间就没再管了，几年就过去了。期间brpc越来越出名，应用挺广泛。
+
+现在总算有点时间了，打算重新开始。
+
+肯定没指望比brpc好，根本没法比。这个项目就像它的名字，'toy'RPC，就是学习rpc的一个玩具吧，
+毕竟开源的rpc都很复杂，就是之前相对简单的redis的网络库也比较复杂了。
