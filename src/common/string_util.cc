@@ -6,7 +6,6 @@
 #include "common/string_util.h"
 
 #include "common/dmg_fp.h"
-#include "common/log.h"
 
 #include <errno.h>
 #include <string.h>
@@ -39,9 +38,6 @@ static void StringAppendVT(StringType* dst,
   while (true) {
     if (result < 0) {
       if (errno != 0 && errno != EOVERFLOW) {
-        Log::WriteToDisk(WARN,
-                         "Unable to printf the "
-                         "requested string due to error.");
         return;
       }
       // Try doubling the buffer size.
@@ -52,9 +48,6 @@ static void StringAppendVT(StringType* dst,
     }
 
     if (mem_length > 32 * 1024 * 1024) {
-        Log::WriteToDisk(WARN,
-                         "Unable to printf the "
-                         "requested string due to size.");
       return;
     }
 

@@ -7,9 +7,9 @@
 #ifndef BASE_BASICS_H_
 #define BASE_BASICS_H_
 
-#define DO_NOT_COPY_AND_ASSIGN(CLASS) \
-    CLASS(const CLASS &); \
-    CLASS& operator=(const CLASS &);
+#define BAN_COPY_AND_ASSIGN(CLASS) \
+    CLASS(const CLASS &) = delete; \
+    CLASS& operator=(const CLASS &) = delete;
 
 typedef unsigned long long uint64;
 typedef unsigned int uint32;
