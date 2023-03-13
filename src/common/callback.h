@@ -10,7 +10,7 @@ class Closure {
   virtual ~Closure() {}
   virtual void Run(const Arg1&) = 0;
  private:
-  DO_NOT_COPY_AND_ASSIGN(Closure);
+  BAN_COPY_AND_ASSIGN(Closure);
 };
 
 template<bool del, class T, class Arg1>
@@ -31,7 +31,7 @@ class Closure_Param_1 : public Closure<Arg1> {
   T* obj_;
   Function func_;
 
-  DO_NOT_COPY_AND_ASSIGN(Closure_Param_1);
+  BAN_COPY_AND_ASSIGN(Closure_Param_1);
 };
 
 template<class T, class Arg1>

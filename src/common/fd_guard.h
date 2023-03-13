@@ -24,6 +24,9 @@ class FDGuard {
     CHECK(fd_ > 0) << "trying to use an invalid fd.";
     return fd_;
   }
+  bool operator<(int v) const {
+    return fd_ < v;
+  }
 
  private:
   int fd_;

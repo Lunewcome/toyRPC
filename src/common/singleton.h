@@ -30,7 +30,7 @@ class Singleton {
   static Mutex m_;
   static shared_ptr<T> inst_;
 
-  DO_NOT_COPY_AND_ASSIGN(Singleton);
+  BAN_COPY_AND_ASSIGN(Singleton);
 };
 template<class T> Mutex Singleton<T>::m_;
 template<class T> shared_ptr<T> Singleton<T>::inst_;

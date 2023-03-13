@@ -1,10 +1,10 @@
-#include "server.h"
+#include "toyrpc_server.h"
 
 #include "gflags/gflags.h"
 
-class ExampleServer : public Server {
+class ExampleServer : public toyRPCServer {
  public:
-  ExampleServer(const ServerOption& options) : Server(options) {}
+  ExampleServer(const ServerOptions& options) : toyRPCServer(options) {}
 };
 
 int main(int argc, char** argv) {
@@ -13,13 +13,11 @@ int main(int argc, char** argv) {
 
   FLAGS_alsologtostderr = 1;
   FLAGS_log_dir = "./logs";
-  google::InitGoogleLogging("bothasy");
+  google::InitGoogleLogging("bothasy-server");
 
-  ServerOption option = { port:8080 };
+  ServerOptions option = { port:8080 };
   ExampleServer s(option);
-  if (!s.Start()) {
-    return -1;
-  }
+  s.Start();
   VLOG(2) << "server started.";
   s.RunUtilAskedToStop();
   return 0;

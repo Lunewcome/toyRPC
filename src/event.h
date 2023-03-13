@@ -1,13 +1,11 @@
 /**
  */
 
-#ifndef SRC_REACTOR_EVENT_H
-#define SRC_REACTOR_EVENT_H
+#ifndef SRC_EVENT_H
+#define SRC_EVENT_H
 
 #include <memory>
 #include <functional>
-
-typedef std::function<void(int, void*)> EventHandler;
 
 typedef int IOMask;
 
@@ -18,16 +16,13 @@ constexpr int IOMaskRW = (IOMaskRead | IOMaskWrite);
 
 struct Event {
   Event() {}
-  Event(int _fd, IOMask mask, EventHandler reader, EventHandler writer,
-        void* data)
-      : fd(_fd), io_mask(mask), read(reader), write(writer), client_data(data) {}
+  Event(int _fd, IOMask mask, void* data)
+      : fd(_fd), io_mask(mask), client_data(data) {}
   Event(const Event&) = default;
   Event& operator=(const Event&) = default;
   void Reset() {
     fd = -1;
     io_mask = IOMaskNone;
-    read = nullptr;
-    write = nullptr;
     client_data = nullptr;
   }
 
@@ -40,10 +35,8 @@ struct Event {
 
   int fd = -1;
   IOMask io_mask = IOMaskNone;
-  EventHandler read = nullptr;
-  EventHandler write = nullptr;
   // managed by user!
   void* client_data = nullptr;
 };
 
-#endif  // SRC_REACTOR_EVENT_H
+#endif  // SRC_EVENT_H

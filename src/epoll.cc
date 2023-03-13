@@ -4,11 +4,17 @@
 #include <cstring>
 #include <unistd.h>
 
+#include "connection.h"
 #include "event.h"
 #include "glog/logging.h"
 
 static constexpr int32_t kEpollWaitTimeout = -1;
 static constexpr int32_t kMaxWaitingEvents = 1024;
+
+Epoll global_epl;
+Epoll& GetGlobalEpoll() {
+  return global_epl;
+}
 
 Epoll::Epoll() {
   epoll_fd_.Reset(epoll_create(kMaxWaitingEvents));
@@ -26,9 +32,6 @@ Epoll::~Epoll() {
 int Epoll::ProcessEvents() {
   int num = epoll_wait(epoll_fd_(), epoll_events_, kMaxWaitingEvents,
                        kEpollWaitTimeout);
-  if (num == 0) {
-    return 0;
-  }
   if (num == -1) {
     return errno == EINTR ? 0 : -1;
   }
@@ -36,10 +39,10 @@ int Epoll::ProcessEvents() {
     const struct epoll_event& ee = epoll_events_[i];
     int fd = ee.data.fd;
     if (ee.events & (EPOLLIN | EPOLLERR | EPOLLHUP)) {
-      events_[fd].read(fd, events_[fd].client_data);
+      Connection::ProcessEpollInput(fd, events_[fd].client_data);
     }
     if (ee.events & (EPOLLOUT | EPOLLERR | EPOLLHUP)) {
-      events_[fd].write(fd, events_[fd].client_data);
+      Connection::ProcessEpollOut(fd, events_[fd].client_data);
     }
   }
   return num;

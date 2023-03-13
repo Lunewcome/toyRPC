@@ -15,12 +15,16 @@ class Epoll {
   Epoll();
   ~Epoll();
   int AddEvent(const Event& e);
-  int AddEvent(int fd, IOMask mask, EventHandler read_handler,
-               EventHandler write_handler, void* client_data) {
-    Event e(fd, mask, read_handler, write_handler, client_data);
+  int AddReadEvent(int fd, void* client_data) {
+    Event e(fd, IOMaskRead, client_data);
+    return AddEvent(e);
+  }
+  int AddWriteEvent(int fd, void* client_data) {
+    Event e(fd, IOMaskWrite, client_data);
     return AddEvent(e);
   }
   int DelEvent(int fd, IOMask mask);
+  void AwaitEpoll() { ProcessEvents(); }
   void RunUtilAskedToStop() {
     while (!stop_) {
       if (-1 == ProcessEvents()) {
@@ -40,5 +44,7 @@ class Epoll {
 
   BAN_COPY_AND_ASSIGN(Epoll);
 };
+
+Epoll& GetGlobalEpoll();
 
 #endif  // SRC_EPOLL_H

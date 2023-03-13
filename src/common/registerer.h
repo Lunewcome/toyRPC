@@ -3,30 +3,9 @@
 
 #include <map>
 #include <string>
+
 #include "common/singleton.h"
-
-#include <iostream>
-using std::cout;
-using std::endl;
-
-#define CHECK_EQ(c1, c2) \
-  if ((c1) != (c2)) { \
-    cout << "Wrong:" << __FILE__ << "," << __LINE__ << endl; \
-    exit(-1); \
-  }
-
-#define EXPECT_TRUE(cond) \
-  if (!(cond)) { \
-    cout << "Wrong:" << __FILE__ << "," \
-        << __LINE__ << endl; \
-    exit(-1); \
-  }
-#define EXPECT_EQ(c1, c2) \
-  if ((c1) != (c2)) { \
-    cout << "Wrong:" << __FILE__ << "," \
-        << __LINE__ << endl; \
-    exit(-1); \
-  }
+#include "glog/logging.h"
 
 namespace registerer {
 
@@ -85,7 +64,7 @@ class ObjectFactory {
     return Any();
   }
  private:
-  DO_NOT_COPY_AND_ASSIGN(ObjectFactory);
+  BAN_COPY_AND_ASSIGN(ObjectFactory);
 };
 
 typedef std::map<std::string, ObjectFactory*> FactoryMap;
@@ -103,7 +82,7 @@ BaseClassMap& global_factory_map();
         FactoryMap &map = ::registerer::global_factory_map()[#base_class]; \
         FactoryMap::iterator iter = map.find(name); \
         if (iter == map.end()) { \
-          cout << "Get instance " << name << " failed." << endl; \
+          LOG(ERROR) << "Get instance " << name << " failed."; \
           return NULL; \
         } \
         Any object = iter->second->NewInstance(); \
@@ -114,7 +93,7 @@ BaseClassMap& global_factory_map();
         FactoryMap& map = ::registerer::global_factory_map()[#base_class]; \
         FactoryMap::iterator iter = map.find(name); \
         if (iter == map.end()) { \
-          cout << "Get singleton instance " << name << " failed." << endl; \
+          LOG(ERROR) << "Get singleton instance " << name << " failed."; \
           return NULL; \
         }\
         Any object = iter->second->GetSingletonInstance(); \
@@ -122,12 +101,12 @@ BaseClassMap& global_factory_map();
       } \
       static const ::std::string GetUniqInstanceName() { \
         FactoryMap &map = ::registerer::global_factory_map()[#base_class]; \
-        CHECK_EQ(map.size(), 1); \
+        CHECK_EQ(map.size(), 1uL); \
         return map.begin()->first; \
       } \
       static base_class *GetUniqInstance() { \
         FactoryMap &map = ::registerer::global_factory_map()[#base_class]; \
-        CHECK_EQ(map.size(), 1); \
+        CHECK_EQ(map.size(), 1uL); \
         Any object = map.begin()->second->NewInstance(); \
         return *(object.any_cast<base_class*>()); \
       } \

@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <netinet/tcp.h>
 
+#include <functional>
 #include <ostream>
 
 #include "common/basics.h"
@@ -12,12 +13,37 @@
 #include "iobuffer.h"
 
 struct Peer {
-  char ip[16];
-  int port;
+  Peer(const struct sockaddr_in& sock_addr) {
+    if (inet_ntop(AF_INET, &sock_addr.sin_addr, ip, INET_ADDRSTRLEN)) {
+      port = ntohs(sock_addr.sin_port);
+    }
+  }
   friend std::ostream& operator<<(std::ostream& os, const Peer& p) {
     os << p.ip << ":" << p.port;
     return os;
   }
+
+  char ip[16];
+  int port;
+};
+
+class Connection;
+typedef std::function<void(int)> CallbackType;
+struct SocketOptions {
+  int sock_fd;
+
+  // yes, it owns the connection...
+  std::unique_ptr<Connection> conn;
+
+  // TODO:protocol.
+   
+  CallbackType on_level_triggered_event;
+};
+
+struct WriteRequest {
+  int sock_fd;
+  
+  CallbackType on_write_done;
 };
 
 class Connection {
@@ -29,7 +55,7 @@ class Connection {
     CLOSING                    = 3,
     CLOSED                     = 4,
 
-    READING                    = 5,
+    READ_OK                    = 5,
 
     WAITING_BUFFER_SPACE       = 6,
     WRITING                    = 7,
@@ -38,54 +64,45 @@ class Connection {
     ERROR                      = 9,
   };
 
-  Connection(Epoll& epl, int sock, const struct sockaddr_storage& addr)
+  Connection(Epoll& epl, int sock, const struct sockaddr_in& addr)
       : epl_(epl),
         in_buff_(kMaxBuffLen),
         out_buff_(kMaxBuffLen),
         sock_(sock),
-        status_(Status::IDLE) {
-    SetPeer(addr);
+        status_(Status::IDLE),
+        peer_(addr) {
+    VLOG(4) << "peer:" << peer_;
   }
-  // it's up to 'server.cc' to close connection.
-  // ~Connection() { Close(); }
+  ~Connection() { close(GetSock()); }
 
+  static void ProcessEpollInput(int fd, void* client_data);
+  static void ProcessEpollOut(int fd, void* client_data);
+  int Send(const char* dat, int len, WriteRequest* req);
+  static void SayGoodbye(int sock, const std::string& msg) {
+    /*int ignore = */write(sock, msg.c_str(), msg.size());
+  }
+
+  enum Status ConsumeDataStream();
   enum Status Status() const { return status_; }
-  static const std::string& StatusToString(enum Status st);
-
-  int Sock() const { return sock_; }
-
+  static const std::string StatusToString(enum Status st);
+  int GetSock() const { return sock_; }
   const Peer& GetPeer() const { return peer_; }
 
-  enum Status Receive();
-
-  int WriteImmediately(const char* data, int len);
-  void KeepWrite(int fd, void* client_data);
   void SyncSend(const char* data, int sz);
 
   IOBuffer& GetInBuff() { return in_buff_; }
   IOBuffer& GetOutBuff() { return out_buff_; }
 
  private:
-  void SetPeer(const struct sockaddr_storage& addr) {
-    auto* sock_addr = (sockaddr_in*)(&addr);
-    if (inet_ntop(AF_INET, &sock_addr->sin_addr, peer_.ip, INET_ADDRSTRLEN)) {
-      peer_.port = sock_addr->sin_port;
-    }
-    VLOG(4) << "peer is:" << peer_;
-  }
-
   static constexpr int kMaxBuffLen = 1024 * 1024;
+  int WriteImmediately(const char* data, int len);
 
   char buff_[kMaxBuffLen];
-
   Epoll& epl_;
-
   IOBuffer in_buff_;
   IOBuffer out_buff_;
-
   int sock_;
   enum Status status_;
-
   Peer peer_;
 
   BAN_COPY_AND_ASSIGN(Connection);

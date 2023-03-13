@@ -6,9 +6,10 @@
 #include "iobuffer.h"
 
 enum class ParseStatus {
-  OK = 0,
-  NEED_MORE_DATA = 1,
-  WRONG = 2,
+  INIT = 0,
+  OK = 1,
+  NEED_MORE_DATA = 2,
+  WRONG = 3,
 };
 
 class ParseResult {
@@ -17,7 +18,7 @@ class ParseResult {
   bool OK() const { return st_ == ParseStatus::OK; }
 
  private:
-  ParseStatus st_ = ParseStatus::OK;
+  ParseStatus st_ = ParseStatus::INIT;
 };
 
 class Protocol {
