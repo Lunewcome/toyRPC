@@ -9,6 +9,7 @@
 #include "epoll.h"
 
 #include "protocols/echo.h"
+#include "protocols/http.h"
 
 struct ServerOptions {
   uint32_t port;
@@ -32,10 +33,14 @@ class toyRPCServer {
   Connection* GetConnection(int fd);
   void RemoveConnection(int sock_fd);
   const std::string& GetProtocolName() const { return options_.protocol; }
+  void TellClient(Connection* conn, const char* msg, int code);
 
   ServerOptions options_;
   FDGuard server_fd_;
   std::unordered_map<int, std::unique_ptr<SocketOptions>> socks_;
+
+  Http protocol_http_;
+  HttpRequest http_request_;
 
   BAN_COPY_AND_ASSIGN(toyRPCServer);
 };

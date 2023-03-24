@@ -51,10 +51,10 @@ void Connection::ProcessEpollOut(int sock_fd, void* client_data) {
   }
   auto* conn = static_cast<Connection*>(client_data);
   CHECK_EQ(conn->GetSock(), sock_fd);
-  char* buff;
+  const char* buff;
   int len;
   while (!conn->GetOutBuff().Empty()) {
-    int buff_pos = conn->GetOutBuff().ConsumeRange(&buff, &len);
+    conn->GetOutBuff().ConsumeRange(&buff, &len);
     int written = conn->WriteImmediately(buff, len);
     if (conn->Status() == Status::ERROR) {
 //       if (conn->cb_interface_.on_write_error) {
@@ -62,7 +62,7 @@ void Connection::ProcessEpollOut(int sock_fd, void* client_data) {
 //       }
       break;
     } else if (conn->Status() == Status::KEEP_WRITE) {
-      conn->GetOutBuff().Confirm(buff_pos + written);
+      conn->GetOutBuff().Confirm(written);
     } else {
       CHECK(conn->Status() == Status::IDLE);
     }

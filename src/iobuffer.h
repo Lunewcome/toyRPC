@@ -33,7 +33,7 @@ class IOBuffer {
     return buff_[start_++];
   }
 
-  int ConsumeRange(char** buff, int* len) {
+  int ConsumeRange(const char** buff, int* len) {
     *buff = buff_ + start_;
     if (start_ < end_) {
       *len = end_ - start_;;
@@ -42,10 +42,62 @@ class IOBuffer {
     }
     return start_;
   }
-  void Confirm(int new_start) { start_ = new_start; }
+  void Confirm(int offset_from_start) {
+    start_ += offset_from_start;
+    start_ %= capacity_;
+  }
+
+  // return : 'offset' from start_ or -1.
+  int Find(char c) {
+    int pos = start_;
+    while (pos != end_) {
+      if (buff_[pos] == c) {
+        return pos - start_;
+      }
+      ++pos %= capacity_;
+    }
+    return -1;
+  }
+
+  // pos : offset from start_.
+  char GetPrePosition(int pos) const {
+    return --pos;
+  }
+
+  // split substring in range [start_, end_pos) with delemiter.
+  void Split(int end_pos, char delemiter, std::vector<std::string>* results) {
+    bool pre_is_delemiter = true;
+    int start = start_;
+    end_pos += start;
+    end_pos %= capacity_;
+    while (start != end_pos) {
+      if (buff_[start] == delemiter) {
+        pre_is_delemiter = true;
+      } else {
+        if (pre_is_delemiter) {
+          results->emplace_back(buff_ + start, 1);
+        } else {
+          results->back().append(buff_ + start, 1);
+        }
+        pre_is_delemiter = false;
+      }
+      ++start %= capacity_;
+    }
+  }
+
+  void MoveData(int len, std::string* dest) {
+    dest->reserve(len);
+    int pos;
+    for (int i = 0; i < len; ++i) {
+      pos = (start_ + i) % capacity_;
+      dest->append(buff_ + pos, 1);
+    }
+    Confirm(len);
+  }
 
   char operator[](int idx) const {
-    idx = (start_ + idx) % capacity_;
+    // idx could be negative...
+    idx = (start_ + idx + capacity_) % capacity_;
     return buff_[idx];
   }
   // like string view?
@@ -64,6 +116,9 @@ class IOBuffer {
     }
   }
 
+  int Size() const {
+    return (end_ - start_ + capacity_) % capacity_;
+  }
   bool Full() const { return FreeSpace() == 0; }
   bool Empty() const { return start_ == end_; }
   int FreeSpace() const {

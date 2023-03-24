@@ -4,6 +4,7 @@
 #include "net.h"
 
 void DebugMsg(const IOBuffer& buff);
+void TellClient(Connection* conn, const char* msg, int code);
 void toyRPCServer::Start() {
   auto port = options_.port;
   server_fd_.Reset(CreateTcpServer(port));
@@ -57,18 +58,27 @@ void toyRPCServer::OnNewMsgReceived(int sock_fd) {
     CHECK(status == Connection::Status::READ_OK)
         << "what's up:" << conn->GetPeer() << ","
         << Connection::StatusToString(status);
-    auto& in_buff = conn->GetInBuff();
-    DebugMsg(in_buff);
-    // debug output.
-    const char* msg = "HTTP/1.1 200 OK\r\n" \
-                      "Server:toyRPC\r\n" \
-                      "Content-Type:txt\r\n" \
-                      "Content-Length:19\r\n\r\nthis is response.\r\n";
-    VLOG(3) << "debug:\r\n" << msg;
-    // 1. what if the conn has been closed in 'RemoveConnection'?
-    // 2. and what if 'RemoveConnection' and 'OnNewMsgReceived'
-    //    run concurrently?
-    conn->Send(msg, strlen(msg), nullptr);
+    while (true) {
+      http_request_.Reset();
+      ParseResult pr = protocol_http_.Parse(conn->GetInBuff(), &http_request_);
+      if (pr.GetStatus() == ParseStatus::OK) {
+        // process http_request...
+        VLOG(4) << http_request_;
+        TellClient(conn, "I've received.\r\n", 200);
+      } else if (pr.GetStatus() == ParseStatus::UNIMPLEMENTED) {
+        TellClient(conn, "method not implemented.\r\n", 404);
+        continue;
+      } else if (pr.GetStatus() == ParseStatus::ERROR) {
+        // clear && close?
+        // skip this request.
+        TellClient(conn, "Fail to parse request.\r\n", 404);
+        continue;
+      } else if (pr.GetStatus() == ParseStatus::NEED_MORE_DATA) {
+        break;
+      } else {
+        CHECK(false) << "What happend?";
+      }
+    }
   }
 }
 
@@ -118,4 +128,21 @@ void DebugMsg(const IOBuffer& buff) {
     VLOG(4) << std::string(buff1, len1) << std::string(buff2, len2);
   };
   debug();
+}
+
+void toyRPCServer::TellClient(Connection* conn, const char* msg, int code) {
+  HttpResponse resp;
+  resp.version = "HTTP/1.1";
+  resp.status_code = code;
+  resp.status_text = "Not Found";
+  resp.content.append(msg, strlen(msg));
+
+  std::string sz;
+  StringPrintf(&sz, "%d", resp.content.size());
+  resp.headers["Content-Length"] = sz;
+  resp.headers["Content-Type"] = "text/plain";
+
+  std::string buf;
+  protocol_http_.PackRequest(resp, &buf);
+  conn->SyncSend(buf.c_str(), buf.size());
 }
