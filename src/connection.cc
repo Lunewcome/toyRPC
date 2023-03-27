@@ -8,37 +8,32 @@ void Connection::ProcessEpollInput(int sock_fd, void* client_data) {
     return;
   }
   auto* opt = static_cast<SocketOptions*>(client_data);
+  if (opt->conn.get()) {
+    opt->conn->last_active_timestamp_ = time(nullptr);
+  }
   CHECK_EQ(sock_fd, opt->sock_fd);
-  opt->on_level_triggered_event(sock_fd);
+  opt->on_level_triggered_event(opt->arg, sock_fd);
 }
 
-int Connection::Send(const char* data, int sz, WriteRequest* req) {
+int Connection::Send(const char* data, int sz) {
+  last_active_timestamp_ = time(nullptr);
   int written = WriteImmediately(data, sz);
-  auto& out_buff = GetOutBuff();
   if (Status() == Connection::Status::IDLE) {
-    // 1. It's lucky that all data has been sent in 'WriteImmediately'.
-    GetGlobalEpoll().DelEvent(GetSock(), IOMaskWrite);
+    // It's lucky that all data has been sent in 'WriteImmediately'.
+    epl_.DelEvent(GetSock(), IOMaskWrite);
     return written;
   } else if (Status() == Connection::Status::ERROR) {
-    // Close?
-//    if (cb_interface_.on_write_error) {
-//      cb_interface_.on_write_error(this);
-//    }
+    // Close immediately or wait a moment?
     return -1;
   } else {
     CHECK(Status() == Connection::Status::KEEP_WRITE);
-    // 2. Only part of data has been sent.
-    // 2.1. copy it to out buffer
-    if (sz - written > out_buff.FreeSpace()) {
-      VLOG(1) << "Data is too big to be written into buf for:" << GetPeer();
-      // fix this 'error'.
-      return written;
-    }
+    auto& out_buff = GetOutBuff();
     out_buff.Append(data + written, sz - written);
-    // 2.2. add a write event and go on writing when it is triggered.
-    if (GetGlobalEpoll().AddWriteEvent(GetSock(), this) < 0) {
+    if (epl_.AddWriteEvent(GetSock(), this) < 0) {
       VLOG(1) << "Fail to add write event for " << GetPeer();
-      return written;
+      out_buff.PopBack(sz - written);
+      // Close immediately or wait a moment?
+      return -1;
     }
     return written;
   }
@@ -50,62 +45,72 @@ void Connection::ProcessEpollOut(int sock_fd, void* client_data) {
     return;
   }
   auto* conn = static_cast<Connection*>(client_data);
+  conn->last_active_timestamp_ = time(nullptr);
   CHECK_EQ(conn->GetSock(), sock_fd);
-  const char* buff;
-  int len;
-  while (!conn->GetOutBuff().Empty()) {
-    conn->GetOutBuff().ConsumeRange(&buff, &len);
-    int written = conn->WriteImmediately(buff, len);
-    if (conn->Status() == Status::ERROR) {
-//       if (conn->cb_interface_.on_write_error) {
-//         conn->cb_interface_.on_write_error(conn);
-//       }
+  while (true) {
+    int rc = conn->GetOutBuff().WriteToSocek(sock_fd);
+    if (rc < 0) {
+      if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+        VLOG(1) << "Fail to write. " << strerror(errno);
+        // Fail.
+        break;
+      }
+    } else if (rc == 0) {
+      // done.
       break;
-    } else if (conn->Status() == Status::KEEP_WRITE) {
-      conn->GetOutBuff().Confirm(written);
     } else {
-      CHECK(conn->Status() == Status::IDLE);
+      conn->GetOutBuff().PopFront(rc);
+      // continue;
     }
-    // max_tries?
   }
   conn->epl_.DelEvent(conn->GetSock(), IOMaskWrite);
 }
 
-enum Connection::Status Connection::ConsumeDataStream() {
-  if (in_buff_.Full()) {
-    // Do not read to prevent peer from sending data.
-    status_ = Status::WAITING_BUFFER_SPACE;
-    return status_;
-  }
-  int free_space = in_buff_.FreeSpace();
-  int in_bytes = 0;
+int Connection::ReadUntilFail(int* save_errno) {
+  int rc;
   while (true) {
-    in_bytes = read(sock_, buff_, free_space);
-    if (in_bytes == 0) {
-      status_ = Status::CLOSING;
-      break;
-    } else if (in_bytes < 0) {
-      if (errno == EINTR) {
-        continue;
-      } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        // no more data.
-        status_ = Status::READ_OK;
-        break;
-      } else {
-        status_ = Status::CLOSING;
-        break;
-      }
-    } else {
-      status_ = Status::READ_OK;
-      in_buff_.Append(buff_, in_bytes);
+    rc = in_buff_.ReadFromSock(sock_);
+    if (rc == 0 || (rc < 0 && errno != EINTR)) {
+      *save_errno = errno;
       break;
     }
   }
-  return status_;
+  return rc;
 }
+// enum Connection::Status Connection::ConsumeDataStream() {
+//   if (in_buff_.Full()) {
+//     // Do not read to prevent peer from sending data.
+//     status_ = Status::WAITING_BUFFER_SPACE;
+//     return status_;
+//   }
+//   int free_space = in_buff_.FreeSpace();
+//   int in_bytes = 0;
+//   while (true) {
+//     in_bytes = read(sock_, buff_, free_space);
+//     if (in_bytes == 0) {
+//       status_ = Status::CLOSING;
+//       break;
+//     } else if (in_bytes < 0) {
+//       if (errno == EINTR) {
+//         continue;
+//       } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+//         // no more data.
+//         status_ = Status::READ_OK;
+//         break;
+//       } else {
+//         status_ = Status::CLOSING;
+//         break;
+//       }
+//     } else {
+//       status_ = Status::READ_OK;
+//       in_buff_.Append(buff_, in_bytes);
+//       break;
+//     }
+//   }
+//   return status_;
+// }
 
 int Connection::WriteImmediately(const char* data, int sz) {
-  // status_ = Status::WRITING;
   int len = write(sock_, data, sz);
   if (len < 0) {
     if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {

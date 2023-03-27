@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <ostream>
+#include <time.h>
 
 #include "common/basics.h"
 #include "epoll.h"
@@ -28,7 +29,7 @@ struct Peer {
 };
 
 class Connection;
-typedef std::function<void(int)> CallbackType;
+typedef void (*CallbackType)(void*, int);
 struct SocketOptions {
   int sock_fd;
 
@@ -37,6 +38,7 @@ struct SocketOptions {
 
   // TODO:protocol.
    
+  void* arg;
   CallbackType on_level_triggered_event;
 };
 
@@ -66,23 +68,24 @@ class Connection {
 
   Connection(Epoll& epl, int sock, const struct sockaddr_in& addr)
       : epl_(epl),
-        in_buff_(kMaxBuffLen),
-        out_buff_(kMaxBuffLen),
+        // in_buff_(kMaxBuffLen),
+        // out_buff_(kMaxBuffLen),
         sock_(sock),
         status_(Status::IDLE),
-        peer_(addr) {
+        peer_(addr),
+        last_active_timestamp_(time(nullptr)) {
     VLOG(4) << "peer:" << peer_;
   }
   ~Connection() { close(GetSock()); }
 
   static void ProcessEpollInput(int fd, void* client_data);
   static void ProcessEpollOut(int fd, void* client_data);
-  int Send(const char* dat, int len, WriteRequest* req);
+  int Send(const char* dat, int len);
   static void SayGoodbye(int sock, const std::string& msg) {
     /*int ignore = */write(sock, msg.c_str(), msg.size());
   }
 
-  enum Status ConsumeDataStream();
+  int ReadUntilFail(int* save_errno);
   enum Status Status() const { return status_; }
   static const std::string StatusToString(enum Status st);
   int GetSock() const { return sock_; }
@@ -92,6 +95,8 @@ class Connection {
 
   IOBuffer& GetInBuff() { return in_buff_; }
   IOBuffer& GetOutBuff() { return out_buff_; }
+
+  int LastActiveTime() const { return last_active_timestamp_; }
 
  private:
   static constexpr int kMaxBuffLen = 1024 * 1024;
@@ -104,6 +109,8 @@ class Connection {
   int sock_;
   enum Status status_;
   Peer peer_;
+  // if a connection is not active for a long time, it could be closed.
+  int last_active_timestamp_;
 
   BAN_COPY_AND_ASSIGN(Connection);
 };
