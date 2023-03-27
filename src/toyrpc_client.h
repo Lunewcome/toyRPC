@@ -27,7 +27,7 @@ class toyRPCClient {
     if (ConnectIfNot(options_.ip, options_.port) != 0) {
       return;
     }
-    VLOG(4) << sock_options_->conn->Send(msg, len, nullptr);
+    VLOG(4) << sock_options_->conn->Send(msg, len);
   }
 
   void AwaitEpoll() {
@@ -36,30 +36,26 @@ class toyRPCClient {
     }
   }
 
-  void OnNewMsg(int sock_fd) {
+  static void OnNewMsg(void* _this, int sock_fd) {
+    auto* client = static_cast<toyRPCClient*>(_this);
     VLOG(3) << "client new msg...";
-    auto* conn = sock_options_->conn.get();
-    auto status = conn->ConsumeDataStream();
-    if (status == Connection::Status::CLOSING) {
+    auto* conn = client->sock_options_->conn.get();
+    int save_errno;
+    int rc = conn->ReadUntilFail(&save_errno);
+    if (rc == 0) {
       VLOG(4) << "peer(" << conn->GetPeer() << ") closed connection.";
-      RemoveConnection(conn);
-      return;
-    } else if (status == Connection::Status::WAITING_BUFFER_SPACE) {
-      VLOG(3) << "waiting space to receive data from " << conn->GetPeer()
-          << ". This could prevent the client from sending data.";
+      client->RemoveConnection(conn);
       return;
     } else {
-      CHECK(status == Connection::Status::READ_OK)
-          << "what's up:" << conn->GetPeer() << ","
-          << Connection::StatusToString(status);
+      CHECK(rc < 0 && save_errno != EINTR);
       auto& in_buff = conn->GetInBuff();
-      char* buff1;
-      char* buff2;
-      int len1, len2;
-      in_buff.View(&buff1, &len1, &buff2, &len2);
-      std::string msg1(buff1, len1);
-      std::string msg2(buff2, len2);
-      VLOG(3) << msg1 << msg2;
+      // char* buff1;
+      // char* buff2;
+      // int len1, len2;
+      // in_buff.View(&buff1, &len1, &buff2, &len2);
+      // std::string msg1(buff1, len1);
+      // std::string msg2(buff2, len2);
+      // VLOG(3) << msg1 << msg2;
     }
   }
 

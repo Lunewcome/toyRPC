@@ -46,10 +46,10 @@ int toyRPCClient::ConnectIfNot(const std::string& ip, int port) {
 void toyRPCClient::OnConnected() {
   sock_options_.reset(new SocketOptions);
   sock_options_->sock_fd = sock_fd_();
+  sock_options_->arg = this;
   sock_options_->conn.reset(new Connection(GetGlobalEpoll(), sock_fd_(),
                                            srv_addr_));
-  sock_options_->on_level_triggered_event = std::bind(
-      &toyRPCClient::OnNewMsg, this, std::placeholders::_1);
+  sock_options_->on_level_triggered_event = &toyRPCClient::OnNewMsg;
   CHECK_EQ(GetGlobalEpoll().AddReadEvent(sock_fd_(), sock_options_.get()), 0);
 }
 

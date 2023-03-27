@@ -8,7 +8,6 @@
 #include "connection.h"
 #include "epoll.h"
 
-#include "protocols/echo.h"
 #include "protocols/http.h"
 
 struct ServerOptions {
@@ -24,8 +23,8 @@ class toyRPCServer {
   void RunUtilAskedToStop() { GetGlobalEpoll().RunUtilAskedToStop(); }
 
  private:
-  void Accept(int sock_fd);
-  void OnNewMsgReceived(int sock_fd);
+  static void Accept(void* _this, int sock_fd);
+  static void OnNewMsgReceived(void* _this, int sock_fd);
   void AddToSocks(std::unique_ptr<SocketOptions>& options) {
     CHECK_EQ(socks_.count(options->sock_fd), 0uL);
     socks_[options->sock_fd].swap(options);
@@ -34,6 +33,7 @@ class toyRPCServer {
   void RemoveConnection(int sock_fd);
   const std::string& GetProtocolName() const { return options_.protocol; }
   void TellClient(Connection* conn, const char* msg, int code);
+  void RemoveDeadConnection();
 
   ServerOptions options_;
   FDGuard server_fd_;

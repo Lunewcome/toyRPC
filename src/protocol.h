@@ -8,10 +8,18 @@
 #include "iobuffer.h"
 
 enum class ParseStatus {
-  OK = 0,
-  NEED_MORE_DATA = 1,
-  UNIMPLEMENTED = 2,
-  ERROR = 3,
+  // beginning of parsing.
+  INIT = 0,
+  // parse done.
+  OK = 1,
+  // need more data on socket.
+  NEED_MORE_DATA = 2,
+  // continue to read and parse buff.
+  CONTINUE = 3,
+  // protocol method is not supported.
+  UNIMPLEMENTED = 4,
+  // error. now no error is considered....
+  ERROR = 5,
 };
 
 class ParseResult {
@@ -21,7 +29,7 @@ class ParseResult {
   bool OK() const { return st_ == ParseStatus::OK; }
 
  private:
-  ParseStatus st_ = ParseStatus::NEED_MORE_DATA;
+  ParseStatus st_ = ParseStatus::INIT;
 };
 
 class Protocol {

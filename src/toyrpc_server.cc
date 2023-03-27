@@ -3,8 +3,6 @@
 #include "glog/logging.h"
 #include "net.h"
 
-void DebugMsg(const IOBuffer& buff);
-void TellClient(Connection* conn, const char* msg, int code);
 void toyRPCServer::Start() {
   auto port = options_.port;
   server_fd_.Reset(CreateTcpServer(port));
@@ -12,8 +10,8 @@ void toyRPCServer::Start() {
   // simply let it core if oom.
   std::unique_ptr<SocketOptions> options(new SocketOptions);
   options->sock_fd = server_fd_(),
-  options->on_level_triggered_event = std::bind(&toyRPCServer::Accept,
-      this, std::placeholders::_1);
+  options->arg= this;
+  options->on_level_triggered_event = &toyRPCServer::Accept;
   options->conn = nullptr;
   CHECK(GetGlobalEpoll().AddReadEvent(server_fd_(), options.get()) == 0);
   // it must be uniqe.
@@ -42,36 +40,34 @@ void toyRPCServer::RemoveConnection(int sock_fd) {
   socks_.erase(conn_itrt);
 }
 
-void toyRPCServer::OnNewMsgReceived(int sock_fd) {
-  auto* conn = GetConnection(sock_fd);
+void toyRPCServer::OnNewMsgReceived(void* _this, int sock_fd) {
+  auto* srv = static_cast<toyRPCServer*>(_this);
+  auto* conn = srv->GetConnection(sock_fd);
   if (!conn) {
     return;
   }
-  auto status = conn->ConsumeDataStream();
-  if (status == Connection::Status::CLOSING) {
+  int save_errno;
+  int rc = conn->ReadUntilFail(&save_errno);
+  if (rc == 0) {
     VLOG(3) << "peer(" << conn->GetPeer() << ") closed connection.";
-    RemoveConnection(sock_fd);
-  } else if (status == Connection::Status::WAITING_BUFFER_SPACE) {
-    VLOG(3) << "waiting space to receive data from " << conn->GetPeer()
-        << ". This could prevent the client from sending data.";
+    srv->RemoveConnection(sock_fd);
   } else {
-    CHECK(status == Connection::Status::READ_OK)
-        << "what's up:" << conn->GetPeer() << ","
-        << Connection::StatusToString(status);
+    CHECK(rc < 0 && save_errno != EINTR);
     while (true) {
-      http_request_.Reset();
-      ParseResult pr = protocol_http_.Parse(conn->GetInBuff(), &http_request_);
+      srv->http_request_.Reset(&conn->GetInBuff());
+      ParseResult pr = srv->protocol_http_.Parse(conn->GetInBuff(),
+                                                 &srv->http_request_);
       if (pr.GetStatus() == ParseStatus::OK) {
         // process http_request...
-        VLOG(4) << http_request_;
-        TellClient(conn, "I've received.\r\n", 200);
+        VLOG(4) << srv->http_request_;
+        srv->TellClient(conn, "I've received.\r\n", 200);
       } else if (pr.GetStatus() == ParseStatus::UNIMPLEMENTED) {
-        TellClient(conn, "method not implemented.\r\n", 404);
+        srv->TellClient(conn, "method not implemented.\r\n", 404);
         continue;
       } else if (pr.GetStatus() == ParseStatus::ERROR) {
         // clear && close?
         // skip this request.
-        TellClient(conn, "Fail to parse request.\r\n", 404);
+        srv->TellClient(conn, "Fail to parse request.\r\n", 404);
         continue;
       } else if (pr.GetStatus() == ParseStatus::NEED_MORE_DATA) {
         break;
@@ -82,8 +78,9 @@ void toyRPCServer::OnNewMsgReceived(int sock_fd) {
   }
 }
 
-void toyRPCServer::Accept(int sock_fd) {
-  CHECK_EQ(server_fd_(), sock_fd);
+void toyRPCServer::Accept(void* _this, int sock_fd) {
+  auto* svr = static_cast<toyRPCServer*>(_this);
+  CHECK_EQ(svr->server_fd_(), sock_fd);
   struct sockaddr_storage in_addr;
   socklen_t in_len = sizeof(in_addr);
   while (true) {
@@ -106,28 +103,14 @@ void toyRPCServer::Accept(int sock_fd) {
         GetGlobalEpoll(), fd_guard(), *(sockaddr_in*)(&in_addr)));
     std::unique_ptr<SocketOptions> options(new SocketOptions);
     options->sock_fd = fd_guard();
-    options->on_level_triggered_event = std::bind(
-        &toyRPCServer::OnNewMsgReceived, this, std::placeholders::_1);
+    options->arg = _this;
+    options->on_level_triggered_event = &toyRPCServer::OnNewMsgReceived;
     options->conn.swap(conn);
     CHECK_EQ(GetGlobalEpoll().AddReadEvent(fd_guard(), options.get()), 0);
     // conn now owns fd.
     fd_guard.Release();
-    AddToSocks(options);
+    svr->AddToSocks(options);
   }
-}
-
-void DebugMsg(const IOBuffer& buff) {
-  auto debug = [&]() {
-    if (buff.Empty()) {
-      return;
-    }
-    char* buff1;
-    char* buff2;
-    int len1, len2;
-    buff.View(&buff1, &len1, &buff2, &len2);
-    VLOG(4) << std::string(buff1, len1) << std::string(buff2, len2);
-  };
-  debug();
 }
 
 void toyRPCServer::TellClient(Connection* conn, const char* msg, int code) {
