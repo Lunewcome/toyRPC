@@ -29,7 +29,10 @@ class toyRPCServer {
     CHECK_EQ(socks_.count(options->sock_fd), 0uL);
     socks_[options->sock_fd].swap(options);
   }
-  Connection* GetConnection(int fd);
+  Connection* GetConnection(int fd) {
+    const auto& itrt_sock = socks_.find(fd);
+    return itrt_sock == socks_.end() ? nullptr : itrt_sock->second->conn.get();
+  }
   void RemoveConnection(int sock_fd);
   const std::string& GetProtocolName() const { return options_.protocol; }
   void TellClient(Connection* conn, const char* msg, int code);

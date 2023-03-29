@@ -71,8 +71,8 @@ class HttpRequest {
   // MAKE IT SIMPLE.
   // bool continue_skipping;
 
-  void ForwardSavePoint();
-  void ForwardSavePoint(IOBuffer::iterator);
+  void ForwardStartingPoint();
+  void ForwardStartingPoint(IOBuffer::iterator);
   void Finish(IOBuffer::iterator cur);
   static bool HitCRFL(void* _this, IOBuffer::iterator pre,
                       IOBuffer::iterator cur) {

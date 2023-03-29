@@ -18,15 +18,6 @@ void toyRPCServer::Start() {
   AddToSocks(options);
 }
 
-Connection* toyRPCServer::GetConnection(int fd) {
-  const auto& itrt_sock = socks_.find(fd);
-  if (itrt_sock == socks_.end()) {
-    return nullptr;
-  } else {
-    return itrt_sock->second->conn.get();
-  }
-}
-
 void toyRPCServer::RemoveConnection(int sock_fd) {
   const auto& conn_itrt = socks_.find(sock_fd);
   if (conn_itrt == socks_.end()) {
@@ -43,9 +34,7 @@ void toyRPCServer::RemoveConnection(int sock_fd) {
 void toyRPCServer::OnNewMsgReceived(void* _this, int sock_fd) {
   auto* srv = static_cast<toyRPCServer*>(_this);
   auto* conn = srv->GetConnection(sock_fd);
-  if (!conn) {
-    return;
-  }
+  CHECK(conn) << "Fatal: server losts a connection...";
   int save_errno;
   int rc = conn->ReadUntilFail(&save_errno);
   if (rc == 0) {
@@ -54,6 +43,7 @@ void toyRPCServer::OnNewMsgReceived(void* _this, int sock_fd) {
   } else {
     CHECK(rc < 0 && save_errno != EINTR);
     while (true) {
+      // Do this reset here?
       srv->http_request_.Reset(&conn->GetInBuff());
       ParseResult pr = srv->protocol_http_.Parse(conn->GetInBuff(),
                                                  &srv->http_request_);
@@ -106,7 +96,10 @@ void toyRPCServer::Accept(void* _this, int sock_fd) {
     options->arg = _this;
     options->on_level_triggered_event = &toyRPCServer::OnNewMsgReceived;
     options->conn.swap(conn);
-    CHECK_EQ(GetGlobalEpoll().AddReadEvent(fd_guard(), options.get()), 0);
+    if (GetGlobalEpoll().AddReadEvent(fd_guard(), options.get()) != 0) {
+      VLOG(1) << "Fail to add event to epoll." << strerror(errno);
+      continue;
+    }
     // conn now owns fd.
     fd_guard.Release();
     svr->AddToSocks(options);

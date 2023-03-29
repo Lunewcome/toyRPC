@@ -3,7 +3,8 @@
 ParseResult Http::Parse(const IOBuffer& data, HttpRequest* req) {
   while (data.Parse(req->opts)) {
     if (req->pr.GetStatus() == ParseStatus::NEED_MORE_DATA ||
-        req->pr.GetStatus() == ParseStatus::OK) {
+        req->pr.GetStatus() == ParseStatus::OK ||
+        req->pr.GetStatus() == ParseStatus::UNIMPLEMENTED) {
       break;
     }
   }
@@ -13,6 +14,7 @@ ParseResult Http::Parse(const IOBuffer& data, HttpRequest* req) {
 void HttpRequest::OnHitRequestLine(void* _this, IOBuffer::iterator pre,
                                    IOBuffer::iterator cur) {
   auto* req = static_cast<HttpRequest*>(_this);
+  // Do not need to forward starting point for a new request.
   // [starting_point, pre)
   const auto& request_line = req->data->AsString(req->opts.starting_point, pre);
   std::vector<std::string> splits;
@@ -23,13 +25,13 @@ void HttpRequest::OnHitRequestLine(void* _this, IOBuffer::iterator pre,
   req->version.swap(splits[2]);
   // update opts.
   req->opts.on_hit = &HttpRequest::OnHitHeaders;
-  req->ForwardSavePoint(cur);
+  req->ForwardStartingPoint(cur);
 }
 
 void HttpRequest::OnHitHeaders(void* _this, IOBuffer::iterator pre,
                                IOBuffer::iterator cur) {
   auto* req = static_cast<HttpRequest*>(_this);
-  req->ForwardSavePoint();
+  req->ForwardStartingPoint();
   if (req->opts.starting_point == pre) {
     // end of headers.
     req->content_length = req->ContentLength();
@@ -57,13 +59,13 @@ void HttpRequest::OnHitHeaders(void* _this, IOBuffer::iterator pre,
       CHECK(false) << "What happed:" << header;
     }
   }
-  req->ForwardSavePoint(cur);
+  req->ForwardStartingPoint(cur);
 }
 
 void HttpRequest::OnHitContent(void* _this, IOBuffer::iterator pre,
                                IOBuffer::iterator cur) {
   auto* req = static_cast<HttpRequest*>(_this);
-  req->ForwardSavePoint();
+  req->ForwardStartingPoint();
   req->content_begin = req->opts.starting_point;
   req->content_end = cur;
   req->Finish(cur);
@@ -74,7 +76,7 @@ void HttpRequest::OnMiss(void* _this, IOBuffer::iterator pre) {
   req->pr.SetStatus(ParseStatus::NEED_MORE_DATA);
 }
 
-void HttpRequest::ForwardSavePoint() {
+void HttpRequest::ForwardStartingPoint() {
   if (pr.GetStatus() == ParseStatus::NEED_MORE_DATA) {
     // parsing a request.
     opts.starting_point = data->Skip(opts.starting_point, '\n');
@@ -88,7 +90,7 @@ void HttpRequest::ForwardSavePoint() {
   }
 }
 
-void HttpRequest::ForwardSavePoint(IOBuffer::iterator cur) {
+void HttpRequest::ForwardStartingPoint(IOBuffer::iterator cur) {
   cur = data->Skip(cur, '\n');
   pr.SetStatus(*cur == '\n' ?
       ParseStatus::NEED_MORE_DATA : ParseStatus::CONTINUE);
@@ -97,7 +99,11 @@ void HttpRequest::ForwardSavePoint(IOBuffer::iterator cur) {
 
 void HttpRequest::Finish(IOBuffer::iterator cur) {
   data->PopFront(cur);
-  pr.SetStatus(ParseStatus::OK);
+  if (IsGet() || IsPost()) {
+    pr.SetStatus(ParseStatus::OK);
+  } else {
+    pr.SetStatus(ParseStatus::UNIMPLEMENTED);
+  }
   opts.starting_point = cur;
   opts.matcher = &HttpRequest::HitCRFL;
   opts.on_hit = &HttpRequest::OnHitRequestLine;

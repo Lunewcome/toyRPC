@@ -81,10 +81,6 @@ class Connection {
   static void ProcessEpollInput(int fd, void* client_data);
   static void ProcessEpollOut(int fd, void* client_data);
   int Send(const char* dat, int len);
-  static void SayGoodbye(int sock, const std::string& msg) {
-    /*int ignore = */write(sock, msg.c_str(), msg.size());
-  }
-
   int ReadUntilFail(int* save_errno);
   enum Status Status() const { return status_; }
   static const std::string StatusToString(enum Status st);

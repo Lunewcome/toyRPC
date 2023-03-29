@@ -77,38 +77,6 @@ int Connection::ReadUntilFail(int* save_errno) {
   }
   return rc;
 }
-// enum Connection::Status Connection::ConsumeDataStream() {
-//   if (in_buff_.Full()) {
-//     // Do not read to prevent peer from sending data.
-//     status_ = Status::WAITING_BUFFER_SPACE;
-//     return status_;
-//   }
-//   int free_space = in_buff_.FreeSpace();
-//   int in_bytes = 0;
-//   while (true) {
-//     in_bytes = read(sock_, buff_, free_space);
-//     if (in_bytes == 0) {
-//       status_ = Status::CLOSING;
-//       break;
-//     } else if (in_bytes < 0) {
-//       if (errno == EINTR) {
-//         continue;
-//       } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-//         // no more data.
-//         status_ = Status::READ_OK;
-//         break;
-//       } else {
-//         status_ = Status::CLOSING;
-//         break;
-//       }
-//     } else {
-//       status_ = Status::READ_OK;
-//       in_buff_.Append(buff_, in_bytes);
-//       break;
-//     }
-//   }
-//   return status_;
-// }
 
 int Connection::WriteImmediately(const char* data, int sz) {
   int len = write(sock_, data, sz);
