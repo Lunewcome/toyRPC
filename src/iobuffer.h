@@ -136,9 +136,7 @@ class IOBuffer {
     head_ = nullptr;
     tail_ = nullptr;
   }
-  bool Empty() const {
-    return (head_ == nullptr) && (tail_ == nullptr);
-  }
+  bool Empty() const;
 
  private:
   friend class iterator;
@@ -202,6 +200,10 @@ inline IOBuffer::iterator IOBuffer::Begin() const {
 
 inline IOBuffer::iterator IOBuffer::End() const {
   return tail_ ? iterator(tail_, tail_->end) : iterator::kNull;
+}
+
+inline bool IOBuffer::Empty() const {
+  return ((head_ == nullptr) && (tail_ == nullptr)) || head_->Empty();
 }
 
 inline int IOBuffer::FreeSpaceWrapper(Block* blk) const {
