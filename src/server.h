@@ -1,5 +1,5 @@
-#ifndef SRC_TOYRPC_SERVER_H
-#define SRC_TOYRPC_SERVER_H
+#ifndef SRC_SERVER_H
+#define SRC_SERVER_H
 
 #include <memory>
 #include <unordered_map>
@@ -15,9 +15,9 @@ struct ServerOptions {
   std::string protocol;
 };
 
-class toyRPCServer {
+class Server {
  public:
-  toyRPCServer(const ServerOptions& options) : options_(options) {}
+  Server(const ServerOptions& options) : options_(options) {}
   void Start();
   void Stop() { GetGlobalEpoll().Stop(); }
   void RunUtilAskedToStop() { GetGlobalEpoll().RunUtilAskedToStop(); }
@@ -45,7 +45,7 @@ class toyRPCServer {
   Http protocol_http_;
   HttpRequest http_request_;
 
-  BAN_COPY_AND_ASSIGN(toyRPCServer);
+  BAN_COPY_AND_ASSIGN(Server);
 };
 
-#endif  // SRC_TOYRPC_SERVER_H
+#endif  // SRC_SERVER_H

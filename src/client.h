@@ -1,5 +1,5 @@
-#ifndef SRC_TOYRPC_CLIENT_H
-#define SRC_TOYRPC_CLIENT_H
+#ifndef SRC_CLIENT_H
+#define SRC_CLIENT_H
 
 #include <functional>
 #include <memory>
@@ -17,11 +17,11 @@ struct ClientOptions {
   // connection_type;
 };
 
-class toyRPCClient {
+class Client {
  public:
   typedef std::function<void(void)> OnSendDoneCallback;
 
-  toyRPCClient(ClientOptions opt) : options_(opt) {};
+  Client(ClientOptions opt) : options_(opt) {};
 
   void DebugSend(const char* msg, int len, OnSendDoneCallback done) {
     if (ConnectIfNot(options_.ip, options_.port) != 0) {
@@ -37,7 +37,7 @@ class toyRPCClient {
   }
 
   static void OnNewMsg(void* _this, int sock_fd) {
-    auto* client = static_cast<toyRPCClient*>(_this);
+    auto* client = static_cast<Client*>(_this);
     VLOG(3) << "client new msg...";
     auto* conn = client->sock_options_->conn.get();
     int save_errno;
@@ -78,7 +78,7 @@ class toyRPCClient {
   std::unique_ptr<SocketOptions> sock_options_;
   struct sockaddr_in srv_addr_;
 
-  BAN_COPY_AND_ASSIGN(toyRPCClient);
+  BAN_COPY_AND_ASSIGN(Client);
 };
 
-#endif  // SRC_TOYRPC_CLIENT_H
+#endif  // SRC_CLIENT_H

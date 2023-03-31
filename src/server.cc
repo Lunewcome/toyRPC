@@ -1,9 +1,9 @@
-#include "toyrpc_server.h"
+#include "server.h"
 
 #include "glog/logging.h"
 #include "net.h"
 
-void toyRPCServer::Start() {
+void Server::Start() {
   auto port = options_.port;
   server_fd_.Reset(CreateTcpServer(port));
   CHECK(!(server_fd_ < 0)) << "Port " << port << " already used?";
@@ -11,14 +11,14 @@ void toyRPCServer::Start() {
   std::unique_ptr<SocketOptions> options(new SocketOptions);
   options->sock_fd = server_fd_(),
   options->arg= this;
-  options->on_level_triggered_event = &toyRPCServer::Accept;
+  options->on_level_triggered_event = &Server::Accept;
   options->conn = nullptr;
   CHECK(GetGlobalEpoll().AddReadEvent(server_fd_(), options.get()) == 0);
   // it must be uniqe.
   AddToSocks(options);
 }
 
-void toyRPCServer::RemoveConnection(int sock_fd) {
+void Server::RemoveConnection(int sock_fd) {
   const auto& conn_itrt = socks_.find(sock_fd);
   if (conn_itrt == socks_.end()) {
     VLOG(1) << "trying to remove non-existing connection.";
@@ -31,8 +31,8 @@ void toyRPCServer::RemoveConnection(int sock_fd) {
   socks_.erase(conn_itrt);
 }
 
-void toyRPCServer::OnNewMsgReceived(void* _this, int sock_fd) {
-  auto* srv = static_cast<toyRPCServer*>(_this);
+void Server::OnNewMsgReceived(void* _this, int sock_fd) {
+  auto* srv = static_cast<Server*>(_this);
   auto* conn = srv->GetConnection(sock_fd);
   CHECK(conn) << "Fatal: server losts a connection...";
   int save_errno;
@@ -68,8 +68,8 @@ void toyRPCServer::OnNewMsgReceived(void* _this, int sock_fd) {
   }
 }
 
-void toyRPCServer::Accept(void* _this, int sock_fd) {
-  auto* svr = static_cast<toyRPCServer*>(_this);
+void Server::Accept(void* _this, int sock_fd) {
+  auto* svr = static_cast<Server*>(_this);
   CHECK_EQ(svr->server_fd_(), sock_fd);
   struct sockaddr_storage in_addr;
   socklen_t in_len = sizeof(in_addr);
@@ -94,7 +94,7 @@ void toyRPCServer::Accept(void* _this, int sock_fd) {
     std::unique_ptr<SocketOptions> options(new SocketOptions);
     options->sock_fd = fd_guard();
     options->arg = _this;
-    options->on_level_triggered_event = &toyRPCServer::OnNewMsgReceived;
+    options->on_level_triggered_event = &Server::OnNewMsgReceived;
     options->conn.swap(conn);
     if (GetGlobalEpoll().AddReadEvent(fd_guard(), options.get()) != 0) {
       VLOG(1) << "Fail to add event to epoll." << strerror(errno);
@@ -106,7 +106,7 @@ void toyRPCServer::Accept(void* _this, int sock_fd) {
   }
 }
 
-void toyRPCServer::TellClient(Connection* conn, const char* msg, int code) {
+void Server::TellClient(Connection* conn, const char* msg, int code) {
   HttpResponse resp;
   resp.version = "HTTP/1.1";
   resp.status_code = code;

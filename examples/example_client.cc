@@ -1,4 +1,4 @@
-#include "toyrpc_client.h"
+#include "client.h"
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -6,9 +6,9 @@
 DEFINE_string(ip, "", "");
 DEFINE_int32(port, 0, "");
 
-class ExampleClient : public toyRPCClient {
+class ExampleClient : public Client {
  public:
-  ExampleClient(ClientOptions& opt) : toyRPCClient(opt) {}
+  ExampleClient(ClientOptions& opt) : Client(opt) {}
 };
 
 int main(int argc, char** argv) {

@@ -1,4 +1,4 @@
-#include "toyrpc_client.h"
+#include "client.h"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -11,7 +11,7 @@ DEFINE_bool(connect_non_blocking, false, "");
 int SetNonBlocking(int fd);
 int SetCloseOnExec(int fd);
 
-int toyRPCClient::ConnectIfNot(const std::string& ip, int port) {
+int Client::ConnectIfNot(const std::string& ip, int port) {
   memset(&srv_addr_, 0, sizeof(srv_addr_));
   if (InitSock(ip, port) != 0) {
     return -1;
@@ -43,29 +43,29 @@ int toyRPCClient::ConnectIfNot(const std::string& ip, int port) {
   return 0;
 }
 
-void toyRPCClient::OnConnected() {
+void Client::OnConnected() {
   sock_options_.reset(new SocketOptions);
   sock_options_->sock_fd = sock_fd_();
   sock_options_->arg = this;
   sock_options_->conn.reset(new Connection(GetGlobalEpoll(), sock_fd_(),
                                            srv_addr_));
-  sock_options_->on_level_triggered_event = &toyRPCClient::OnNewMsg;
+  sock_options_->on_level_triggered_event = &Client::OnNewMsg;
   CHECK_EQ(GetGlobalEpoll().AddReadEvent(sock_fd_(), sock_options_.get()), 0);
 }
 
-void toyRPCClient::RemoveConnection(Connection* conn) {
+void Client::RemoveConnection(Connection* conn) {
   CHECK_EQ(GetGlobalEpoll().DelEvent(sock_fd_(), IOMaskRW), 0);
   sock_options_.reset(nullptr);
 }
 
-void toyRPCClient::Reconnect(Connection* close_conn) {
+void Client::Reconnect(Connection* close_conn) {
 }
 
-void toyRPCClient::OnInputOk(Connection* close_conn) {
+void Client::OnInputOk(Connection* close_conn) {
 }
 
-void toyRPCClient::CheckConnected(int sock_fd, void* client_data) {
-  auto* client = static_cast<toyRPCClient*>(client_data);
+void Client::CheckConnected(int sock_fd, void* client_data) {
+  auto* client = static_cast<Client*>(client_data);
   CHECK_EQ(sock_fd, client->sock_fd_());
   int err;
   socklen_t len = sizeof(err);
@@ -86,7 +86,7 @@ void toyRPCClient::CheckConnected(int sock_fd, void* client_data) {
   client->OnConnected();
 }
 
-int toyRPCClient::InitSock(const std::string& ip, int port) {
+int Client::InitSock(const std::string& ip, int port) {
   srv_addr_.sin_family = AF_INET;
   srv_addr_.sin_port = htons(port);
   if (inet_aton(ip.c_str(), &srv_addr_.sin_addr) != 1) {

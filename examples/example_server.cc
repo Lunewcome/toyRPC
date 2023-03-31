@@ -1,10 +1,10 @@
-#include "toyrpc_server.h"
+#include "server.h"
 
 #include "gflags/gflags.h"
 
-class ExampleServer : public toyRPCServer {
+class ExampleServer : public Server {
  public:
-  ExampleServer(const ServerOptions& options) : toyRPCServer(options) {}
+  ExampleServer(const ServerOptions& options) : Server(options) {}
 };
 
 int main(int argc, char** argv) {
