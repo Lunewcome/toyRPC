@@ -38,7 +38,7 @@ cc_library (
     ":common",
     "@com_github_gflags_gflags//:gflags",
     "@com_github_google_glog//:glog",
-#    "@com_google_protobuf//:protobuf",
+    "@com_google_protobuf//:protobuf",
     "@com_google_googletest//:gtest_main",
   ],
   copts = COPTS,
@@ -63,4 +63,18 @@ cc_binary (
   deps = [
     "toyRPC",
   ],
+)
+
+proto_library (
+  name = "rpc_protocol_proto",
+  srcs = [
+    "src/protocol.proto",
+  ],
+)
+
+cc_proto_library (
+  name = "cc_rpc_protocol",
+  deps = [
+    ":rpc_protocol_proto",
+  ]
 )

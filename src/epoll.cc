@@ -4,7 +4,7 @@
 #include <cstring>
 #include <unistd.h>
 
-#include "connection.h"
+#include "channel.h"
 #include "event.h"
 #include "glog/logging.h"
 
@@ -39,10 +39,10 @@ int Epoll::ProcessEvents() {
     const struct epoll_event& ee = epoll_events_[i];
     int fd = ee.data.fd;
     if (ee.events & (EPOLLIN | EPOLLERR | EPOLLHUP)) {
-      Connection::ProcessEpollInput(fd, events_[fd].client_data);
+      toyRPCChannel::ProcessEpollInput(fd, events_[fd].client_data);
     }
     if (ee.events & (EPOLLOUT | EPOLLERR | EPOLLHUP)) {
-      Connection::ProcessEpollOut(fd, events_[fd].client_data);
+      toyRPCChannel::ProcessEpollOut(fd, events_[fd].client_data);
     }
   }
   return num;

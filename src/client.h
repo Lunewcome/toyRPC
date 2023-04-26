@@ -7,7 +7,8 @@
 
 #include "common/basics.h"
 #include "common/fd_guard.h"
-#include "connection.h"
+#include "channel.h"
+#include "controller.h"
 
 struct ClientOptions {
   std::string ip;
@@ -37,6 +38,8 @@ class Client {
   }
 
   static void OnNewMsg(void* _this, int sock_fd) {
+    toyRPCController cntl;
+
     auto* client = static_cast<Client*>(_this);
     VLOG(3) << "client new msg...";
     auto* conn = client->sock_options_->conn.get();
@@ -69,9 +72,9 @@ class Client {
   const std::string& GetProtocolName() const { return options_.protocol; }
   static void CheckConnected(int sock_fd, void* client_data);
   void OnConnected();
-  void Reconnect(Connection* close_conn);
-  void OnInputOk(Connection* close_conn);
-  void RemoveConnection(Connection* conn);
+  void Reconnect(toyRPCChannel* close_conn);
+  void OnInputOk(toyRPCChannel* close_conn);
+  void RemoveConnection(toyRPCChannel* conn);
 
   ClientOptions options_;
   FDGuard sock_fd_;

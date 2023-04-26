@@ -89,7 +89,7 @@ void Server::Accept(void* _this, int sock_fd) {
       continue;
     }
     // simply let it core if oom.
-    std::unique_ptr<Connection> conn(new Connection(
+    std::unique_ptr<toyRPCChannel> conn(new toyRPCChannel(
         GetGlobalEpoll(), fd_guard(), *(sockaddr_in*)(&in_addr)));
     std::unique_ptr<SocketOptions> options(new SocketOptions);
     options->sock_fd = fd_guard();
@@ -106,7 +106,7 @@ void Server::Accept(void* _this, int sock_fd) {
   }
 }
 
-void Server::TellClient(Connection* conn, const char* msg, int code) {
+void Server::TellClient(toyRPCChannel* conn, const char* msg, int code) {
   HttpResponse resp;
   resp.version = "HTTP/1.1";
   resp.status_code = code;

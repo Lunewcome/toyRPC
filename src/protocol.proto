@@ -1,0 +1,17 @@
+syntax="proto2";
+
+option cc_generic_services = true;
+
+message Protocol {
+  optional string name = 1;
+}
+
+message Request {
+}
+
+message Response {
+}
+
+service toyRPC {
+  rpc Start(Request) returns (Response);
+}

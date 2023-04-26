@@ -1,8 +1,8 @@
-#include "connection.h"
+#include "channel.h"
 
 #include "glog/logging.h"
 
-void Connection::ProcessEpollInput(int sock_fd, void* client_data) {
+void toyRPCChannel::ProcessEpollInput(int sock_fd, void* client_data) {
   if (!client_data) {
     VLOG(3) << "error or hung fd:" << sock_fd;
     return;
@@ -15,18 +15,18 @@ void Connection::ProcessEpollInput(int sock_fd, void* client_data) {
   opt->on_level_triggered_event(opt->arg, sock_fd);
 }
 
-int Connection::Send(const char* data, int sz) {
+int toyRPCChannel::Send(const char* data, int sz) {
   last_active_timestamp_ = time(nullptr);
   int written = WriteImmediately(data, sz);
-  if (Status() == Connection::Status::IDLE) {
+  if (Status() == toyRPCChannel::Status::IDLE) {
     // It's lucky that all data has been sent in 'WriteImmediately'.
     epl_.DelEvent(GetSock(), IOMaskWrite);
     return written;
-  } else if (Status() == Connection::Status::ERROR) {
+  } else if (Status() == toyRPCChannel::Status::ERROR) {
     // Close immediately or wait a moment?
     return -1;
   } else {
-    CHECK(Status() == Connection::Status::KEEP_WRITE);
+    CHECK(Status() == toyRPCChannel::Status::KEEP_WRITE);
     auto& out_buff = GetOutBuff();
     out_buff.Append(data + written, sz - written);
     if (epl_.AddWriteEvent(GetSock(), this) < 0) {
@@ -39,12 +39,12 @@ int Connection::Send(const char* data, int sz) {
   }
 }
 
-void Connection::ProcessEpollOut(int sock_fd, void* client_data) {
+void toyRPCChannel::ProcessEpollOut(int sock_fd, void* client_data) {
   if (!client_data) {
     VLOG(3) << "error or hung fd:" << sock_fd;
     return;
   }
-  auto* conn = static_cast<Connection*>(client_data);
+  auto* conn = static_cast<toyRPCChannel*>(client_data);
   conn->last_active_timestamp_ = time(nullptr);
   CHECK_EQ(conn->GetSock(), sock_fd);
   while (true) {
@@ -66,7 +66,7 @@ void Connection::ProcessEpollOut(int sock_fd, void* client_data) {
   conn->epl_.DelEvent(conn->GetSock(), IOMaskWrite);
 }
 
-int Connection::ReadUntilFail(int* save_errno) {
+int toyRPCChannel::ReadUntilFail(int* save_errno) {
   int rc;
   while (true) {
     rc = in_buff_.ReadFromSock(sock_);
@@ -78,7 +78,7 @@ int Connection::ReadUntilFail(int* save_errno) {
   return rc;
 }
 
-int Connection::WriteImmediately(const char* data, int sz) {
+int toyRPCChannel::WriteImmediately(const char* data, int sz) {
   int len = write(sock_, data, sz);
   if (len < 0) {
     if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -94,7 +94,7 @@ int Connection::WriteImmediately(const char* data, int sz) {
   return len;
 }
 
-void Connection::SyncSend(const char* data, int sz) {
+void toyRPCChannel::SyncSend(const char* data, int sz) {
   int written = 0;
   int max_tries = 5;
   while (written < sz && max_tries--) {
@@ -113,7 +113,7 @@ void Connection::SyncSend(const char* data, int sz) {
 
 #define StatusCase(st) \
   case Status::st : return #st
-const std::string Connection::StatusToString(enum Status st) {
+const std::string toyRPCChannel::StatusToString(enum Status st) {
   switch (st) {
     StatusCase(IDLE);
     StatusCase(CONNECTING);
@@ -128,4 +128,11 @@ const std::string Connection::StatusToString(enum Status st) {
     default:
       return "UNKNOWN";
   }
+}
+
+void toyRPCChannel::CallMethod(const google::protobuf::MethodDescriptor* method,
+                               google::protobuf::RpcController* cntl,
+                               const google::protobuf::Message* request,
+                               google::protobuf::Message* response,
+                               google::protobuf::Closure* done) {
 }

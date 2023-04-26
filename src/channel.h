@@ -12,6 +12,7 @@
 #include "common/basics.h"
 #include "epoll.h"
 #include "iobuffer.h"
+#include "google/protobuf/service.h"
 
 struct Peer {
   Peer(const struct sockaddr_in& sock_addr) {
@@ -28,13 +29,13 @@ struct Peer {
   int port;
 };
 
-class Connection;
+class toyRPCChannel;
 typedef void (*CallbackType)(void*, int);
 struct SocketOptions {
   int sock_fd;
 
   // yes, it owns the connection...
-  std::unique_ptr<Connection> conn;
+  std::unique_ptr<toyRPCChannel> conn;
 
   // TODO:protocol.
    
@@ -48,7 +49,7 @@ struct WriteRequest {
   CallbackType on_write_done;
 };
 
-class Connection {
+class toyRPCChannel : public google::protobuf::RpcChannel {
  public:
   enum class Status {
     IDLE                       = 0,
@@ -66,7 +67,7 @@ class Connection {
     ERROR                      = 9,
   };
 
-  Connection(Epoll& epl, int sock, const struct sockaddr_in& addr)
+  toyRPCChannel(Epoll& epl, int sock, const struct sockaddr_in& addr)
       : epl_(epl),
         // in_buff_(kMaxBuffLen),
         // out_buff_(kMaxBuffLen),
@@ -76,7 +77,13 @@ class Connection {
         last_active_timestamp_(time(nullptr)) {
     VLOG(4) << "peer:" << peer_;
   }
-  ~Connection() { close(GetSock()); }
+  ~toyRPCChannel() { close(GetSock()); }
+
+  virtual void CallMethod(const google::protobuf::MethodDescriptor*,
+                          google::protobuf::RpcController*,
+                          const google::protobuf::Message*,
+                          google::protobuf::Message*,
+                          google::protobuf::Closure*) override;
 
   static void ProcessEpollInput(int fd, void* client_data);
   static void ProcessEpollOut(int fd, void* client_data);
@@ -108,7 +115,7 @@ class Connection {
   // if a connection is not active for a long time, it could be closed.
   int last_active_timestamp_;
 
-  BAN_COPY_AND_ASSIGN(Connection);
+  BAN_COPY_AND_ASSIGN(toyRPCChannel);
 };
 
 #endif  // SRC_CONNECTION_H
