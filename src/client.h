@@ -7,8 +7,8 @@
 
 #include "common/basics.h"
 #include "common/fd_guard.h"
-#include "channel.h"
 #include "controller.h"
+#include "sock_handler.h"
 
 struct ClientOptions {
   std::string ip;
@@ -72,9 +72,9 @@ class Client {
   const std::string& GetProtocolName() const { return options_.protocol; }
   static void CheckConnected(int sock_fd, void* client_data);
   void OnConnected();
-  void Reconnect(toyRPCChannel* close_conn);
-  void OnInputOk(toyRPCChannel* close_conn);
-  void RemoveConnection(toyRPCChannel* conn);
+  void Reconnect(SockHandler* close_conn);
+  void OnInputOk(SockHandler* close_conn);
+  void RemoveConnection(SockHandler* conn);
 
   ClientOptions options_;
   FDGuard sock_fd_;

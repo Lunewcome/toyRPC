@@ -5,8 +5,8 @@
 #include <unordered_map>
 
 #include "common/fd_guard.h"
-#include "channel.h"
 #include "epoll.h"
+#include "sock_handler.h"
 
 #include "protocols/http.h"
 
@@ -29,13 +29,13 @@ class Server {
     CHECK_EQ(socks_.count(options->sock_fd), 0uL);
     socks_[options->sock_fd].swap(options);
   }
-  toyRPCChannel* GetConnection(int fd) {
+  SockHandler* GetConnection(int fd) {
     const auto& itrt_sock = socks_.find(fd);
     return itrt_sock == socks_.end() ? nullptr : itrt_sock->second->conn.get();
   }
   void RemoveConnection(int sock_fd);
   const std::string& GetProtocolName() const { return options_.protocol; }
-  void TellClient(toyRPCChannel* conn, const char* msg, int code);
+  void TellClient(SockHandler* conn, const char* msg, int code);
   void RemoveDeadConnection();
 
   ServerOptions options_;

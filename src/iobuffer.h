@@ -6,6 +6,8 @@
 #include "common/basics.h"
 #include "glog/logging.h"
 
+#include "google/protobuf/io/zero_copy_stream.h" // ZeroCopyInputStream
+
 // The underlying structure is a doublely-linked list of arrays.
 // Initially, the list is empty. When data is written into an IOBuffer,
 // a new array is allocated, and another one is allocated and linked as
@@ -14,6 +16,8 @@
 // allocation when all data in it has been consumed. Memory allocation
 // and deallocation maybe improved this way.
 class IOBuffer {
+friend class IOBufferAsZeroCopyInputStream;
+friend class IOBufferAsZeroCopyOutputStream;
  private:
   struct Block;
 
@@ -146,7 +150,7 @@ class IOBuffer {
   int FreeSpaceWrapper(Block* blk) const;
   int SizeWrapper(Block* blk) const;
   void ForwardHeadByOneBlock();
-  void BorwardTailByOneBlock();
+  void BackwardTailByOneBlock();
 
   // experimental....
   // Cut the buffer from head to pos(including).
@@ -256,5 +260,44 @@ inline int IOBuffer::iterator::operator-(const iterator& other) const {
   }
   return steps;
 }
+
+using ZeroCopyInputStream = google::protobuf::io::ZeroCopyInputStream;
+using ZeroCopyOutputStream = google::protobuf::io::ZeroCopyOutputStream;
+class IOBufferAsZeroCopyInputStream : public ZeroCopyInputStream {
+ public:
+  explicit IOBufferAsZeroCopyInputStream(const IOBuffer& buf)
+      : add_offset_(0),
+        byte_count_(0),
+        block_(buf.head_) {
+    if (buf.Empty()) {
+      block_ = nullptr;
+    }
+  }
+
+  bool Next(const void** data, int* size) override;
+  void BackUp(int count) override;
+  bool Skip(int count) override;
+  google::protobuf::int64 ByteCount() const override { return byte_count_; }
+
+private:
+  int add_offset_;
+  google::protobuf::int64 byte_count_;
+  const IOBuffer::Block* block_;
+};
+
+class IOBufferAsZeroCopyOutputStream : public ZeroCopyOutputStream {
+ public:
+  explicit IOBufferAsZeroCopyOutputStream(IOBuffer* buf)
+      : buf_(buf), cur_block_(nullptr), byte_count_(0) {}
+
+  bool Next(void** data, int* size) override;
+  void BackUp(int count) override;
+  google::protobuf::int64 ByteCount() const override { return byte_count_; }
+
+ private:
+  IOBuffer* buf_;
+  IOBuffer::Block* cur_block_;
+  google::protobuf::int64 byte_count_;
+};
 
 #endif  // SRC_IOBUFFER_H

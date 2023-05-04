@@ -47,21 +47,21 @@ void Client::OnConnected() {
   sock_options_.reset(new SocketOptions);
   sock_options_->sock_fd = sock_fd_();
   sock_options_->arg = this;
-  sock_options_->conn.reset(new toyRPCChannel(GetGlobalEpoll(), sock_fd_(),
+  sock_options_->conn.reset(new SockHandler(GetGlobalEpoll(), sock_fd_(),
                                               srv_addr_));
   sock_options_->on_level_triggered_event = &Client::OnNewMsg;
   CHECK_EQ(GetGlobalEpoll().AddReadEvent(sock_fd_(), sock_options_.get()), 0);
 }
 
-void Client::RemoveConnection(toyRPCChannel* conn) {
+void Client::RemoveConnection(SockHandler* conn) {
   CHECK_EQ(GetGlobalEpoll().DelEvent(sock_fd_(), IOMaskRW), 0);
   sock_options_.reset(nullptr);
 }
 
-void Client::Reconnect(toyRPCChannel* close_conn) {
+void Client::Reconnect(SockHandler* close_conn) {
 }
 
-void Client::OnInputOk(toyRPCChannel* close_conn) {
+void Client::OnInputOk(SockHandler* close_conn) {
 }
 
 void Client::CheckConnected(int sock_fd, void* client_data) {

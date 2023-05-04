@@ -4,9 +4,9 @@
 #include <cstring>
 #include <unistd.h>
 
-#include "channel.h"
 #include "event.h"
 #include "glog/logging.h"
+#include "sock_handler.h"
 
 static constexpr int32_t kEpollWaitTimeout = -1;
 static constexpr int32_t kMaxWaitingEvents = 1024;
@@ -39,10 +39,10 @@ int Epoll::ProcessEvents() {
     const struct epoll_event& ee = epoll_events_[i];
     int fd = ee.data.fd;
     if (ee.events & (EPOLLIN | EPOLLERR | EPOLLHUP)) {
-      toyRPCChannel::ProcessEpollInput(fd, events_[fd].client_data);
+      SockHandler::ProcessEpollInput(fd, events_[fd].client_data);
     }
     if (ee.events & (EPOLLOUT | EPOLLERR | EPOLLHUP)) {
-      toyRPCChannel::ProcessEpollOut(fd, events_[fd].client_data);
+      SockHandler::ProcessEpollOut(fd, events_[fd].client_data);
     }
   }
   return num;

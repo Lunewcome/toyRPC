@@ -147,7 +147,7 @@ void IOBuffer::PopBack(int len) {
     int fs = tail_->Size();
     if (fs <= len) {
       len -= fs;
-      BorwardTailByOneBlock();
+      BackwardTailByOneBlock();
     } else {
       tail_->end -= len;
     }
@@ -187,7 +187,7 @@ void IOBuffer::ForwardHeadByOneBlock() {
   RecycleBlock(tmp);
 }
 
-void IOBuffer::BorwardTailByOneBlock() {
+void IOBuffer::BackwardTailByOneBlock() {
   if (Empty()) {
     return;
   }
@@ -238,4 +238,64 @@ std::string IOBuffer::AsString(const iterator& begin,
     ++itrt;
   }
   return ret;
+}
+
+bool IOBufferAsZeroCopyInputStream::Next(const void** data, int* size) {
+  if (!block_) {
+    return false;
+  }
+  *data = block_->data + block_->start + add_offset_;
+  *size = block_->Size() - add_offset_;
+  byte_count_ += block_->Size() - add_offset_;
+  add_offset_ = 0;
+  block_ = block_->next;
+  return true;
+}
+
+void IOBufferAsZeroCopyInputStream::BackUp(int count) {
+  if (block_ && block_->pre) {
+    const IOBuffer::Block* pre = block_->pre;
+    CHECK(add_offset_ == 0 && pre->Size() >= count)
+        << "BackUp() is not after a Next()";
+    add_offset_ = pre->Size() - count;
+    byte_count_ -= count;
+    block_ = pre;
+  } else {
+    LOG(FATAL) << "BackUp an empty ZeroCopyInputStream";
+  }
+}
+
+bool IOBufferAsZeroCopyInputStream::Skip(int count) {
+  while (block_) {
+    const int left_bytes = block_->Size() - add_offset_;
+    if (count < left_bytes) {
+      add_offset_ += count;
+      byte_count_ += count;
+      return true;
+    }
+    count -= left_bytes;
+    add_offset_ = 0;
+    byte_count_ += left_bytes;
+    block_ = block_->next;
+  }
+  return false;
+}
+
+bool IOBufferAsZeroCopyOutputStream::Next(void** data, int* size) {
+  if (buf_->Empty() || buf_->tail_->Full()) {
+    // core if AllocateBlock fails.
+    cur_block_ = buf_->AllocateBlock();
+    buf_->Append(cur_block_);
+  }
+  *data = (void*)(cur_block_->WriteEntry());
+  *size = cur_block_->FreeSpace();
+  byte_count_ += cur_block_->FreeSpace();
+  return true;
+}
+
+void IOBufferAsZeroCopyOutputStream::BackUp(int count) {
+  if (cur_block_ && !buf_->Empty()) {
+    CHECK(cur_block_ == buf_->tail_) << "cur_block_ must match buf_->tail_.";
+  }
+  buf_->PopBack(count);
 }
