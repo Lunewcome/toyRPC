@@ -7,8 +7,8 @@
 
 #include "common/basics.h"
 #include "common/fd_guard.h"
+#include "connection.h"
 #include "controller.h"
-#include "sock_handler.h"
 
 struct ClientOptions {
   std::string ip;
@@ -33,7 +33,7 @@ class Client {
 
   void AwaitEpoll() {
     if (Connected()) {
-      GetGlobalEpoll().AwaitEpoll();
+      GetGlobalEpoll()->AwaitEpoll();
     }
   }
 
@@ -72,9 +72,9 @@ class Client {
   const std::string& GetProtocolName() const { return options_.protocol; }
   static void CheckConnected(int sock_fd, void* client_data);
   void OnConnected();
-  void Reconnect(SockHandler* close_conn);
-  void OnInputOk(SockHandler* close_conn);
-  void RemoveConnection(SockHandler* conn);
+  void Reconnect(Connection* close_conn);
+  void OnInputOk(Connection* close_conn);
+  void RemoveConnection(Connection* conn);
 
   ClientOptions options_;
   FDGuard sock_fd_;

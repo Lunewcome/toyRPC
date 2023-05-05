@@ -26,7 +26,7 @@ int Client::ConnectIfNot(const std::string& ip, int port) {
         // https://blog.csdn.net/hnlyyk/article/details/51444617
         return -1;
       } else if (errno == EINPROGRESS && FLAGS_connect_non_blocking) {
-        if (GetGlobalEpoll().AddWriteEvent(sock_fd_(), this) < 0) {
+        if (GetGlobalEpoll()->AddWriteEvent(sock_fd_(), this) < 0) {
           return -1;
         }
         // what if connect timeout?
@@ -47,21 +47,20 @@ void Client::OnConnected() {
   sock_options_.reset(new SocketOptions);
   sock_options_->sock_fd = sock_fd_();
   sock_options_->arg = this;
-  sock_options_->conn.reset(new SockHandler(GetGlobalEpoll(), sock_fd_(),
-                                              srv_addr_));
+  sock_options_->conn.reset(new Connection(sock_fd_(), srv_addr_));
   sock_options_->on_level_triggered_event = &Client::OnNewMsg;
-  CHECK_EQ(GetGlobalEpoll().AddReadEvent(sock_fd_(), sock_options_.get()), 0);
+  CHECK_EQ(GetGlobalEpoll()->AddReadEvent(sock_fd_(), sock_options_.get()), 0);
 }
 
-void Client::RemoveConnection(SockHandler* conn) {
-  CHECK_EQ(GetGlobalEpoll().DelEvent(sock_fd_(), IOMaskRW), 0);
+void Client::RemoveConnection(Connection* conn) {
+  CHECK_EQ(GetGlobalEpoll()->DelEvent(sock_fd_(), IOMaskRW), 0);
   sock_options_.reset(nullptr);
 }
 
-void Client::Reconnect(SockHandler* close_conn) {
+void Client::Reconnect(Connection* close_conn) {
 }
 
-void Client::OnInputOk(SockHandler* close_conn) {
+void Client::OnInputOk(Connection* close_conn) {
 }
 
 void Client::CheckConnected(int sock_fd, void* client_data) {
@@ -71,7 +70,7 @@ void Client::CheckConnected(int sock_fd, void* client_data) {
   socklen_t len = sizeof(err);
   auto fail = [&]() {
     // close(sock_fd);
-    GetGlobalEpoll().DelEvent(sock_fd, IOMaskRead);
+    GetGlobalEpoll()->DelEvent(sock_fd, IOMaskRead);
   };
   if (getsockopt(sock_fd, SOL_SOCKET, SO_ERROR, &err, &len) < 0) {
     VLOG(1) << "Fail to getsockopt:" << strerror(errno);

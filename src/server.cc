@@ -1,5 +1,7 @@
 #include "server.h"
 
+#include <memory>
+
 #include "glog/logging.h"
 #include "net.h"
 
@@ -13,33 +15,20 @@ void Server::Start() {
   options->arg= this;
   options->on_level_triggered_event = &Server::Accept;
   options->conn = nullptr;
-  CHECK(GetGlobalEpoll().AddReadEvent(server_fd_(), options.get()) == 0);
+  CHECK(GetGlobalEpoll()->AddReadEvent(server_fd_(), options.get()) == 0);
   // it must be uniqe.
-  AddToSocks(options);
-}
-
-void Server::RemoveConnection(int sock_fd) {
-  const auto& conn_itrt = socks_.find(sock_fd);
-  if (conn_itrt == socks_.end()) {
-    VLOG(1) << "trying to remove non-existing connection.";
-    return;
-  }
-  CHECK_EQ(GetGlobalEpoll().DelEvent(sock_fd, IOMaskRW), 0);
-  // How if some data has already been read from this sock?
-  // Seems that sock should be closed after all read/write
-  // events have been handled.
-  socks_.erase(conn_itrt);
+  GetGlobalConnectionManager()->Insert(options.release());
 }
 
 void Server::OnNewMsgReceived(void* _this, int sock_fd) {
   auto* srv = static_cast<Server*>(_this);
-  auto* conn = srv->GetConnection(sock_fd);
+  auto* conn = GetGlobalConnectionManager()->GetConnection(sock_fd);
   CHECK(conn) << "Fatal: server losts a connection...";
   int save_errno;
   int rc = conn->ReadUntilFail(&save_errno);
   if (rc == 0) {
     VLOG(3) << "peer(" << conn->GetPeer() << ") closed connection.";
-    srv->RemoveConnection(sock_fd);
+    GetGlobalConnectionManager()->Remove(sock_fd);
   } else {
     CHECK(rc < 0 && save_errno != EINTR);
     while (true) {
@@ -89,24 +78,24 @@ void Server::Accept(void* _this, int sock_fd) {
       continue;
     }
     // simply let it core if oom.
-    std::unique_ptr<SockHandler> conn(new SockHandler(
-        GetGlobalEpoll(), fd_guard(), *(sockaddr_in*)(&in_addr)));
+    std::unique_ptr<Connection> conn(new Connection(
+        fd_guard(), *(sockaddr_in*)(&in_addr)));
     std::unique_ptr<SocketOptions> options(new SocketOptions);
     options->sock_fd = fd_guard();
     options->arg = _this;
     options->on_level_triggered_event = &Server::OnNewMsgReceived;
     options->conn.swap(conn);
-    if (GetGlobalEpoll().AddReadEvent(fd_guard(), options.get()) != 0) {
+    if (GetGlobalEpoll()->AddReadEvent(fd_guard(), options.get()) != 0) {
       VLOG(1) << "Fail to add event to epoll." << strerror(errno);
       continue;
     }
     // conn now owns fd.
     fd_guard.Release();
-    svr->AddToSocks(options);
+    GetGlobalConnectionManager()->Insert(options.release());
   }
 }
 
-void Server::TellClient(SockHandler* conn, const char* msg, int code) {
+void Server::TellClient(Connection* conn, const char* msg, int code) {
   HttpResponse resp;
   resp.version = "HTTP/1.1";
   resp.status_code = code;

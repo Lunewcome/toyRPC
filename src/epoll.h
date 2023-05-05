@@ -45,6 +45,6 @@ class Epoll {
   BAN_COPY_AND_ASSIGN(Epoll);
 };
 
-Epoll& GetGlobalEpoll();
+Epoll* GetGlobalEpoll();
 
 #endif  // SRC_EPOLL_H
