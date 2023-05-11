@@ -3,50 +3,84 @@
 #include <memory>
 
 #include "glog/logging.h"
+#include "google/protobuf/descriptor.h"
+#include "google/protobuf/service.h"
 #include "net.h"
+
+bool Server::AddService(google::protobuf::Service* service) {
+  if (NULL == service) {
+    LOG(ERROR) << "Parameter[service] is NULL!";
+    return false;
+  }
+  const google::protobuf::ServiceDescriptor* sd = service->GetDescriptor();
+  if (sd->method_count() == 0) {
+    LOG(ERROR) << "service=" << sd->full_name() << " have no method.";
+    return false;
+  }
+  if (full_name_service_map_.find(sd->full_name()) !=
+      full_name_service_map_.end()) {
+    LOG(ERROR) << "There is an existing service with full name:"
+        << sd->full_name();
+    return false;
+  }
+  for (int i = 0; i < sd->method_count(); ++i) {
+    const google::protobuf::MethodDescriptor* md = sd->method(i);
+    MethodProperty& mp = full_name_service_map_[sd->full_name()];
+    mp.service = service;
+    mp.method = md;
+  }
+  return true;
+}
+
+const Server::MethodProperty*
+Server::GetMethodProperty(const std::string& full_name) const {
+  auto itrt = full_name_service_map_.find(full_name);
+  if  (itrt == full_name_service_map_.end()) {
+    return nullptr;
+  }
+  return &itrt->second;
+}
 
 void Server::Start() {
   auto port = options_.port;
-  server_fd_.Reset(CreateTcpServer(port));
-  CHECK(!(server_fd_ < 0)) << "Port " << port << " already used?";
-  // simply let it core if oom.
-  std::unique_ptr<SocketOptions> options(new SocketOptions);
-  options->sock_fd = server_fd_(),
-  options->arg= this;
-  options->on_level_triggered_event = &Server::Accept;
-  options->conn = nullptr;
-  CHECK(GetGlobalEpoll()->AddReadEvent(server_fd_(), options.get()) == 0);
-  // it must be uniqe.
-  GetGlobalConnectionManager()->Insert(options.release());
+  FDGuard server_fd(CreateTcpServer(port));
+  CHECK(!(server_fd < 0)) << "Port " << port << " already used?";
+  SocketOptions options;
+  options.sock_fd = server_fd();
+  options.peer = Peer();
+  options.arg = this;
+  options.on_level_triggered_event = &Server::Accept;
+  std::unique_ptr<Socket> s(new Socket(options));
+  CHECK(GetGlobalEpoll()->AddReadEvent(server_fd.Release(), s.get()) == 0);
+  GetGlobalSocketPool()->Insert(s.release());
 }
 
 void Server::OnNewMsgReceived(void* _this, int sock_fd) {
   auto* srv = static_cast<Server*>(_this);
-  auto* conn = GetGlobalConnectionManager()->GetConnection(sock_fd);
-  CHECK(conn) << "Fatal: server losts a connection...";
-  int save_errno;
-  int rc = conn->ReadUntilFail(&save_errno);
+  Socket* s = GetGlobalSocketPool()->Get(sock_fd);
+  CHECK(s) << "Fatal: server losts a connection...";
+  int saved_errno;
+  int rc = s->ReadUntilFail(&saved_errno);
   if (rc == 0) {
-    VLOG(3) << "peer(" << conn->GetPeer() << ") closed connection.";
-    GetGlobalConnectionManager()->Remove(sock_fd);
+    VLOG(5) << "peer(" << s->GetPeer() << ") closed connection.";
+    GetGlobalSocketPool()->Remove(sock_fd);
   } else {
-    CHECK(rc < 0 && save_errno != EINTR);
+    CHECK(rc < 0 && saved_errno != EINTR);
+    srv->cntl_.current_sock = s;
+    auto& http_request = srv->cntl_.http_request;
     while (true) {
-      // Do this reset here?
-      srv->http_request_.Reset(&conn->GetInBuff());
-      ParseResult pr = srv->protocol_http_.Parse(conn->GetInBuff(),
-                                                 &srv->http_request_);
+      http_request.Reset(&s->GetInBuff());
+      ParseResult pr = srv->protocol_http_.Parse(s->GetInBuff(), &http_request);
       if (pr.GetStatus() == ParseStatus::OK) {
-        // process http_request...
-        VLOG(4) << srv->http_request_;
-        srv->TellClient(conn, "I've received.\r\n", 200);
+        VLOG(4) << http_request;
+        srv->CallServiceMethod();
       } else if (pr.GetStatus() == ParseStatus::UNIMPLEMENTED) {
-        srv->TellClient(conn, "method not implemented.\r\n", 404);
+        srv->ReplyErr(s, "method not implemented.", 404);
         continue;
       } else if (pr.GetStatus() == ParseStatus::ERROR) {
         // clear && close?
         // skip this request.
-        srv->TellClient(conn, "Fail to parse request.\r\n", 404);
+        srv->ReplyErr(s, "Fail to parse request.", 404);
         continue;
       } else if (pr.GetStatus() == ParseStatus::NEED_MORE_DATA) {
         break;
@@ -58,8 +92,7 @@ void Server::OnNewMsgReceived(void* _this, int sock_fd) {
 }
 
 void Server::Accept(void* _this, int sock_fd) {
-  auto* svr = static_cast<Server*>(_this);
-  CHECK_EQ(svr->server_fd_(), sock_fd);
+  // auto* svr = static_cast<Server*>(_this);
   struct sockaddr_storage in_addr;
   socklen_t in_len = sizeof(in_addr);
   while (true) {
@@ -74,40 +107,52 @@ void Server::Accept(void* _this, int sock_fd) {
         break;
       }
     }
-    if (SetCloseOnExec(fd_guard()) == -1) {
+    if (SetCloseOnExec(fd_guard()) == -1 || SetNonBlocking(fd_guard()) == -1) {
       continue;
     }
-    // simply let it core if oom.
-    std::unique_ptr<Connection> conn(new Connection(
-        fd_guard(), *(sockaddr_in*)(&in_addr)));
     std::unique_ptr<SocketOptions> options(new SocketOptions);
     options->sock_fd = fd_guard();
+    options->peer = Peer(*(sockaddr_in*)(&in_addr));
     options->arg = _this;
     options->on_level_triggered_event = &Server::OnNewMsgReceived;
-    options->conn.swap(conn);
-    if (GetGlobalEpoll()->AddReadEvent(fd_guard(), options.get()) != 0) {
+    std::unique_ptr<Socket> s(new Socket(*options.get()));
+    if (GetGlobalEpoll()->AddReadEvent(fd_guard(), s.get()) != 0) {
       VLOG(1) << "Fail to add event to epoll." << strerror(errno);
       continue;
     }
-    // conn now owns fd.
+    // s now owns fd.
     fd_guard.Release();
-    GetGlobalConnectionManager()->Insert(options.release());
+    GetGlobalSocketPool()->Insert(s.release());
   }
 }
 
-void Server::TellClient(Connection* conn, const char* msg, int code) {
-  HttpResponse resp;
-  resp.version = "HTTP/1.1";
-  resp.status_code = code;
-  resp.status_text = "Not Found";
-  resp.content.append(msg, strlen(msg));
+void Server::ReplyErr(Socket* s, const char* err_msg, int code) {
+  VLOG(2) << err_msg;
+  protocol_http_.BuildResponse(err_msg, code, &cntl_.http_response);
+  protocol_http_.PackResponse(cntl_, &cntl_.current_sock->GetOutBuff());
+  cntl_.current_sock->StartWrite(0, nullptr);
+}
 
-  std::string sz;
-  StringPrintf(&sz, "%d", resp.content.size());
-  resp.headers["Content-Length"] = sz;
-  resp.headers["Content-Type"] = "text/plain";
+void Server::CallServiceMethod() {
+  static const std::string& kServiceFullName = "ServiceFullName";
+  const auto& req = cntl_.http_request;
+  const auto& itrt_name = req.headers.find(kServiceFullName);
+  if (itrt_name == req.headers.end()) {
+    ReplyErr(cntl_.current_sock, "No header named \'ServiceFullName\'", 404);
+    return;
+  }
+  const auto* mp = GetMethodProperty(itrt_name->second);
+  if (!mp) {
+    const std::string& Err = "No service named " + itrt_name->second;
+    ReplyErr(cntl_.current_sock, Err.c_str(), 404);
+    return;
+  }
+  google::protobuf::Closure* done = NewCallback(this, &Server::OnDone, &cntl_);
+  mp->service->CallMethod(mp->method, &cntl_, nullptr, nullptr, done);
+}
 
-  std::string buf;
-  protocol_http_.PackRequest(resp, &buf);
-  conn->SyncSend(buf.c_str(), buf.size());
+void Server::OnDone(toyRPCController* cntl) {
+  protocol_http_.PackResponse(*cntl, &cntl->current_sock->GetOutBuff());
+  google::protobuf::Closure* done = nullptr;
+  cntl->current_sock->StartWrite(0, done);
 }

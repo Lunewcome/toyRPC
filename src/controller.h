@@ -4,6 +4,8 @@
 #include <string>
 
 #include "common/basics.h"
+#include "protocols/http.h"
+#include "socket.h"
 
 #include "google/protobuf/service.h"
 
@@ -27,6 +29,11 @@ class toyRPCController : public google::protobuf::RpcController {
   virtual void StartCancel() override;
   virtual bool IsCanceled() const override;
   virtual void NotifyOnCancel(google::protobuf::Closure*) override;
+
+  HttpRequest http_request;
+  HttpResponse http_response;
+  Socket* current_sock;
+  uint64_t call_id;
 
  private:
   bool failed_;

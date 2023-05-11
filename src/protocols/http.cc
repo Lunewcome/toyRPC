@@ -1,5 +1,7 @@
 #include "http.h"
 
+#include "controller.h"
+
 ParseResult Http::Parse(const IOBuffer& data, HttpRequest* req) {
   while (data.Parse(req->opts)) {
     if (req->pr.GetStatus() == ParseStatus::NEED_MORE_DATA ||
@@ -111,7 +113,27 @@ void HttpRequest::Finish(IOBuffer::iterator cur) {
   // opts.on_error = nullptr;
 }
 
-void Http::PackRequest(const HttpResponse& resp, std::string* buf) {
+void Http::BuildRequest(const std::string& service_full_name, HttpRequest* req) {
+  req->method = "GET";
+  req->version = "HTTP/1.1";
+  req->headers["Content-Length"] = "";
+  req->headers["ServiceFullName"] = "";
+}
+
+void Http::BuildResponse(const char* msg, int code, HttpResponse* resp) {
+  resp->version = "HTTP/1.1";
+  resp->status_code = code;
+  resp->status_text = "Not Found";
+  resp->content.append(msg, strlen(msg));
+  resp->content.append("\n", 1);
+
+  std::string sz;
+  StringPrintf(&sz, "%d", resp->content.size());
+  resp->headers["Content-Length"] = sz;
+  resp->headers["Content-Type"] = "text/plain";
+}
+
+void Http::PackResponse(const HttpResponse& resp, std::string* buf) {
   StringAppendF(buf, "%s %d %s\r\n",
                 resp.version.c_str(),
                 resp.status_code,
@@ -120,4 +142,25 @@ void Http::PackRequest(const HttpResponse& resp, std::string* buf) {
     StringAppendF(buf, "%s: %s\r\n", ele.first.c_str(), ele.second.c_str());
   }
   StringAppendF(buf, "\r\n%s", resp.content.c_str());
+}
+
+void Http::PackResponse(const toyRPCController& cntl, IOBuffer* out) {
+  VLOG(1) << "To improve this code later...";
+  std::string buf;
+  PackResponse(cntl.http_response, &buf);
+  out->Append(buf);
+}
+
+void Http::PackRequest(const HttpRequest& req, std::string* buf) {
+  StringAppendF(buf, "GET / HTTP/1.1\r\n");
+  for (const auto& ele : req.headers) {
+    StringAppendF(buf, "%s: %s\r\n", ele.first.c_str(), ele.second.c_str());
+  }
+}
+
+void Http::PackRequest(const toyRPCController& cntl, IOBuffer* out) {
+  VLOG(1) << "To improve this code later...";
+  std::string buf;
+  PackRequest(cntl.http_request, &buf);
+  out->Append(buf);
 }

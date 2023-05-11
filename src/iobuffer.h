@@ -30,7 +30,7 @@ friend class IOBufferAsZeroCopyOutputStream;
   // Send buffer to sock.
   // On succeeding, bytes written is returned; return 0 when buffer is empty.
   // -1 and errno is set.
-  int WriteToSocek(int sock_fd) const;
+  int WriteToSock(int sock_fd) const;
   // Pop 'len' charactars from front of the buffer.
   // Do nothing if 'len <= 0' or buffer is empty.
   // Pop all data if len >= size of buffer.
@@ -136,10 +136,7 @@ friend class IOBufferAsZeroCopyOutputStream;
   // Interpret [begin, end) as a string.
   std::string AsString(const iterator& begin, const iterator& end) const;
   // clear without freeing memory.
-  void Clear() {
-    head_ = nullptr;
-    tail_ = nullptr;
-  }
+  void Clear();
   bool Empty() const;
 
  private:
@@ -204,6 +201,15 @@ inline IOBuffer::iterator IOBuffer::Begin() const {
 
 inline IOBuffer::iterator IOBuffer::End() const {
   return tail_ ? iterator(tail_, tail_->end) : iterator::kNull;
+}
+
+inline void IOBuffer::Clear() {
+  while (head_ != tail_) {
+    RecycleBlock(head_);
+    head_ = head_->next;
+  }
+  head_ = nullptr;
+  tail_ = nullptr;
 }
 
 inline bool IOBuffer::Empty() const {

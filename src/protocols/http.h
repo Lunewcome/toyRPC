@@ -103,12 +103,20 @@ struct HttpResponse {
   std::string content;
 };
 
+class toyRPCController;
 class Http { // : public Protocol {
  public:
   Http() {}
   ~Http() {}
   ParseResult Parse(const IOBuffer& data, HttpRequest* req);
-  void PackRequest(const HttpResponse& resp, std::string* buf);
+
+  void BuildRequest(const std::string& service_full_name, HttpRequest* req);
+  void PackRequest(const HttpRequest& resp, std::string* buf);
+  void PackRequest(const toyRPCController& cntl, IOBuffer* out);
+
+  void BuildResponse(const char* msg, int code, HttpResponse* resp);
+  void PackResponse(const HttpResponse& resp, std::string* buf);
+  void PackResponse(const toyRPCController& cntl, IOBuffer* out);
 
  private:
 };

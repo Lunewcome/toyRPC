@@ -44,7 +44,7 @@ int IOBuffer::ReadFromSock(int sock_fd) {
   return rc;
 }
 
-int IOBuffer::WriteToSocek(int sock_fd) const {
+int IOBuffer::WriteToSock(int sock_fd) const {
   if (Empty()) {
     return 0;
   }
@@ -73,7 +73,7 @@ void IOBuffer::Append(IOBuffer& other) {
     other.head_->pre = tail_;
     tail_ = other.tail_;
   }
-  other.Clear();
+  other.head_ = other.tail_ = nullptr;
 }
 
 void IOBuffer::Append(Block* blk) {

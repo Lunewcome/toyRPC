@@ -47,20 +47,20 @@ void Client::OnConnected() {
   sock_options_.reset(new SocketOptions);
   sock_options_->sock_fd = sock_fd_();
   sock_options_->arg = this;
-  sock_options_->conn.reset(new Connection(sock_fd_(), srv_addr_));
+  // sock_options_->conn.reset(new Socket(sock_fd_(), srv_addr_));
   sock_options_->on_level_triggered_event = &Client::OnNewMsg;
   CHECK_EQ(GetGlobalEpoll()->AddReadEvent(sock_fd_(), sock_options_.get()), 0);
 }
 
-void Client::RemoveConnection(Connection* conn) {
+void Client::RemoveConnection(Socket* conn) {
   CHECK_EQ(GetGlobalEpoll()->DelEvent(sock_fd_(), IOMaskRW), 0);
   sock_options_.reset(nullptr);
 }
 
-void Client::Reconnect(Connection* close_conn) {
+void Client::Reconnect(Socket* close_conn) {
 }
 
-void Client::OnInputOk(Connection* close_conn) {
+void Client::OnInputOk(Socket* close_conn) {
 }
 
 void Client::CheckConnected(int sock_fd, void* client_data) {
