@@ -62,8 +62,8 @@ int Epoll::AddEvent(const Event& e) {
     epoll_event.events |= events_[fd].WaitingWrite() ? EPOLLOUT : 0;
     op = epoll_event.events ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
   }
-  epoll_event.events |= e.io_mask & IOMaskRead ? EPOLLIN : 0;
-  epoll_event.events |= e.io_mask & IOMaskWrite ? EPOLLOUT : 0;
+  epoll_event.events |= e.io_mask & IOMaskRead ? EPOLLIN | EPOLLET : 0;
+  epoll_event.events |= e.io_mask & IOMaskWrite ? EPOLLOUT | EPOLLET : 0;
   int ret = epoll_ctl(epoll_fd_(), op, fd, &epoll_event);
   if (!ret) {
     events_[fd] = e;

@@ -1,8 +1,6 @@
 #ifndef SRC_SOCKET_H
 #define SRC_SOCKET_H
 
-#include <arpa/inet.h>
-
 #include <ostream>
 #include <time.h>
 #include <unordered_map>
@@ -13,37 +11,27 @@
 #include "google/protobuf/service.h"
 
 struct Peer {
-  Peer() = default;
-  Peer(const std::string& ip, int port) : local_ip(ip), local_port(port) {}
-  Peer(const struct sockaddr_in& sock_addr) {
-    char ip[16];
-    memset(ip, '\0', 16);
-    if (inet_ntop(AF_INET, &sock_addr.sin_addr, ip, INET_ADDRSTRLEN)) {
-      local_ip.assign(ip);
-      local_port = ntohs(sock_addr.sin_port);
-    }
-  }
-  const std::string& ip() const { return local_ip; }
-  int port() const { return local_port; }
+  std::string ip;
+  int port;
+  Peer(const std::string& _ip = "", int _port = -1) : ip(_ip), port(_port) {}
   friend std::ostream& operator<<(std::ostream& os, const Peer& p) {
-    os << p.local_ip << ":" << p.local_port;
+    os << p.ip << ":" << p.port;
     return os;
   }
-
- private:
-  std::string local_ip;
-  int local_port = -1;
 };
 
 typedef void (*CallbackType)(void*, int);
 struct SocketOptions {
-  int sock_fd;
+  int fd;
   Peer peer;
-
-  std::string protocol_name;
-
+  // std::string protocol_name;
   void* arg;
-  CallbackType on_level_triggered_event;
+  CallbackType on_edge_triggered_event;
+};
+
+struct WriteConfig {
+  uint64_t call_id;
+  google::protobuf::Closure* on_replied;
 };
 
 class Socket {
@@ -53,41 +41,39 @@ class Socket {
     KEEP_WRITE   = 1,
     ERROR        = 2,
     FAIL_CONNECT = 3,
-    Connecting   = 4,
-    Connected    = 5,
+    CONNECTING   = 4,
+    CONNECTED    = 5,
   };
 
-  Socket(const SocketOptions& options)
-      : status_(Status::IDLE),
-        last_active_timestamp_(time(nullptr)),
-        options_(options) {
-    fd_ = options_.sock_fd;
-  }
-  ~Socket() {
-    if (fd_ > 0) {
-      VLOG(4) << "Closing connection to " << options_.peer;
-      close(fd_);
-      fd_ = -1;
-    }
-    // ignore in_buff_ / out_buff_ ?
-  }
+  Socket(const SocketOptions& options);
+  ~Socket();
+  // Called when a read event is fired.
   static void ProcessEpollInput(int fd, void* client_data);
+  // Called when a write event is fired.
   static void ProcessEpollOut(int fd, void* client_data);
-  int StartWrite(uint64_t call_id, google::protobuf::Closure* done);
+  // Send data in out_buff_ to peer:
+  // 1. First connect if needed.
+  // 2. If connected, write to fd directly.
+  // 3. If all data is writen luckily in a call, return and call
+  //    done->Run(); otherwise, register a write event to epoll.
+  int StartWrite(WriteConfig config);
+  // Write data to peer directly. Part of data that has not beed
+  // sent would be discard.
   int WriteNoBuff(const char* data, int len);
+  // Read from fd as much as possible until an error occurs.
   int ReadUntilFail(int* saved_errno);
-  enum Status Status() const { return status_; }
-  static const std::string StatusToString(enum Status st);
-  int GetFD() const { return fd_; }
   const Peer& GetPeer() const { return options_.peer; }
 
-  IOBuffer& GetInBuff() { return in_buff_; }
-  IOBuffer& GetOutBuff() { return out_buff_; }
+  // I/O buff.
+  IOBuffer& ReadBuff() { return in_buff_; }
+  IOBuffer& WriteBuff() { return out_buff_; }
 
+  // For deleting inactive connections.
   int LastActiveTime() const { return last_active_timestamp_; }
-  const SocketOptions& GetOptions() const { return options_; }
 
  private:
+  friend class SocketPool;
+  const std::string StatusToString();
   int ConnectIfNot();
   int InitSock(const Peer& peer, struct sockaddr_in* peer_addr);
   bool CheckConnected(int fd);
@@ -109,8 +95,8 @@ class SocketPool {
  public:
   SocketPool() {}
   void Insert(Socket* s) {
-    CHECK_EQ(sock_map_.count(s->GetFD()), 0uL);
-    sock_map_[s->GetFD()].reset(s);
+    CHECK_EQ(sock_map_.count(s->fd_), 0uL);
+    sock_map_[s->fd_].reset(s);
   }
   Socket* Get(int fd) const {
     const auto& itrt_sock = sock_map_.find(fd);

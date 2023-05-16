@@ -30,14 +30,12 @@ class Server {
   static void OnNewMsgReceived(void* _this, int sock_fd);
   const std::string& GetProtocolName() const { return options_.protocol; }
   void ReplyErr(Socket* conn, const char* err, int code);
-  void CallServiceMethod();
+  void CallServiceMethod(toyRPCController* cntl);
   const MethodProperty* GetMethodProperty(const std::string& full_name) const;
-  void OnDone(toyRPCController* cntl);
+  void IssueRPC(toyRPCController* cntl);
 
   ServerOptions options_;
-  toyRPCController cntl_;
   Http protocol_http_;
-
   std::unordered_map<std::string, MethodProperty> full_name_service_map_;
 
   BAN_COPY_AND_ASSIGN(Server);

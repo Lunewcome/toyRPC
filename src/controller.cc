@@ -9,3 +9,8 @@ bool toyRPCController::IsCanceled() const {
 
 void toyRPCController::NotifyOnCancel(google::protobuf::Closure*) {
 }
+
+toyRPCControllerPool* GetGlobaltoyRPCControllerPool() {
+  static toyRPCControllerPool pool;
+  return &pool;
+}

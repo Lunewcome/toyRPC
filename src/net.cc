@@ -1,7 +1,7 @@
 #include "net.h"
 
-#include <arpa/inet.h>
 #include <fcntl.h>
+#include <memory.h>
 #include <netinet/tcp.h>
 
 int CreateTcpServer(int port) {
@@ -78,4 +78,15 @@ int Listen(int fd) {
   return 0;
 }
 
-
+bool GetIpPortFromSockAddr(const sockaddr_in& sock_addr,
+                           std::string* local_ip, int* local_port) {
+  char ip[16];
+  memset(ip, '\0', 16);
+  if (inet_ntop(AF_INET, &sock_addr.sin_addr, ip, INET_ADDRSTRLEN)) {
+    local_ip->assign(ip);
+    *local_port = ntohs(sock_addr.sin_port);
+    return true;
+  } else {
+    return false;
+  }
+}

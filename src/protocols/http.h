@@ -11,6 +11,18 @@
 class HttpRequest {
  public:
   HttpRequest() = default;
+  HttpRequest(IOBuffer* _data) {
+    Reset(_data);
+  }
+  void Swap(HttpRequest* other) {
+    method.swap(other->method);
+    uri.swap(other->uri);
+    version.swap(other->version);
+    headers.swap(other->headers);
+    content_length = other->content_length;
+    content_begin = other->content_begin;
+    content_end = other->content_end;
+  }
   void Reset(IOBuffer* _data) {
     data = _data;
     method.clear();
@@ -54,6 +66,16 @@ class HttpRequest {
   }
   // A better name?
   IOBuffer::iterator EndOfRequest() { return content_end; }
+  bool GetCallId(uint64_t* call_id) const {
+    const auto itrt = headers.find("CallId");
+    if (itrt == headers.end()) {
+      return false;
+    }
+    int64_t id;
+    bool ret = StringToInt64(itrt->second, &id);
+    *call_id = id;
+    return ret;
+  }
   
   IOBuffer* data;
   std::string method;

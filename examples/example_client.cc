@@ -1,4 +1,4 @@
-#include "client.h"
+//#include "client.h"
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -6,10 +6,10 @@
 DEFINE_string(ip, "", "");
 DEFINE_int32(port, 0, "");
 
-class ExampleClient : public Client {
+/*class ExampleClient : public Client {
  public:
   ExampleClient(ClientOptions& opt) : Client(opt) {}
-};
+  };*/
 
 int main(int argc, char** argv) {
   google::SetUsageMessage("what are you expecting from \'toy\'RPC? ^_~");
@@ -19,18 +19,18 @@ int main(int argc, char** argv) {
   FLAGS_log_dir = "./logs";
   google::InitGoogleLogging("bothasy-client");
 
-  ClientOptions option = {
+  /*ClientOptions option = {
     ip : FLAGS_ip,
     port : FLAGS_port,
     timeout_ms:10,
   };
   ExampleClient c(option);
+  */
+  //const char* msg = "GET / HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n";
 
-  const char* msg = "GET / HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n";
+  //c.DebugSend(msg, strlen(msg), nullptr);
 
-  c.DebugSend(msg, strlen(msg), nullptr);
-
-  c.AwaitEpoll();
+  //c.AwaitEpoll();
 
   return 0;
 }

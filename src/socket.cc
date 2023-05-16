@@ -3,50 +3,69 @@
 #include "glog/logging.h"
 #include "net.h"
 
+Socket::Socket(const SocketOptions& options)
+    : status_(Status::IDLE),
+      last_active_timestamp_(time(nullptr)),
+      options_(options) {
+  fd_ = options_.fd;
+}
+
+Socket::~Socket() {
+  if (fd_ > 0) {
+    VLOG(4) << "Closing connection to " << options_.peer;
+    close(fd_);
+    fd_ = -1;
+  }
+  // ignore in_buff_ / out_buff_ ?
+}
+
 void Socket::ProcessEpollInput(int sock_fd, void* client_data) {
   if (!client_data) {
-    VLOG(3) << "error or hung fd:" << sock_fd;
+    VLOG(5) << "error or hung fd:" << sock_fd;
     return;
   }
   auto* s = static_cast<Socket*>(client_data);
   s->last_active_timestamp_ = time(nullptr);
-  CHECK_EQ(sock_fd, s->GetFD());
-  s->options_.on_level_triggered_event(s->options_.arg, sock_fd);
+  CHECK_EQ(sock_fd, s->fd_);
+  s->options_.on_edge_triggered_event(s->options_.arg, sock_fd);
 }
 
-int Socket::StartWrite(uint64_t call_id, google::protobuf::Closure* done) {
-  // send out_buff_.
+int Socket::StartWrite(WriteConfig config) {
+  const auto& call_id = config.call_id;
+  auto* on_replied = config.on_replied;
   last_active_timestamp_ = time(nullptr);
-  if (Status() == Status::ERROR) {
+  if (status_ == Status::ERROR) {
     return -1;
   }
   if (ConnectIfNot() < 0) {
     status_ = Status::FAIL_CONNECT;
     return -1;
   }
-  if (Status() == Status::Connecting) {
+  if (status_ == Status::CONNECTING) {
     return 0;
   } else {
-    CHECK(Status() == Status::Connected);
+    CHECK(status_ == Status::CONNECTED);
     int written = out_buff_.WriteToSock(fd_);
     if (written < 0) {
       status_ = Socket::Status::ERROR;
-      VLOG(2) << "Write err:" << StatusToString(Status());
+      VLOG(2) << "Write err:" << StatusToString();
       return -1;
     } else {
       out_buff_.PopFront(written);
       if (out_buff_.Empty()) {
         // Write done.
         status_ = Socket::Status::IDLE;
-        done->Run();
+     	if (on_replied) {
+     	  on_replied->Run();
+     	}
       } else {
         status_ = Socket::Status::KEEP_WRITE;
-        if (GetGlobalEpoll()->AddWriteEvent(GetFD(), this) < 0) {
+        if (GetGlobalEpoll()->AddWriteEvent(fd_, this) < 0) {
           VLOG(1) << "Fail to add write event for " << GetPeer();
         }
-        if (done) {
+        if (on_replied) {
           CHECK(req_done_map_.find(call_id) == req_done_map_.end());
-          req_done_map_[call_id].reset(done);
+          req_done_map_[call_id].reset(on_replied);
         }
       }
       return written;
@@ -72,15 +91,15 @@ void Socket::ProcessEpollOut(int sock_fd, void* client_data) {
   }
   auto* s = static_cast<Socket*>(client_data);
   s->last_active_timestamp_ = time(nullptr);
-  CHECK_EQ(s->GetFD(), sock_fd);
-  if (s->Status() == Status::ERROR) {
+  CHECK_EQ(s->fd_, sock_fd);
+  if (s->status_ == Status::ERROR) {
     return;
   }
-  if (s->Status() == Status::Connecting && !s->CheckConnected(s->GetFD())) {
+  if (s->status_ == Status::CONNECTING && !s->CheckConnected(s->fd_)) {
     return;
   }
   while (true) {
-    int rc = s->GetOutBuff().WriteToSock(sock_fd);
+    int rc = s->WriteBuff().WriteToSock(sock_fd);
     if (rc < 0) {
       if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
         VLOG(1) << "Fail to write. " << strerror(errno);
@@ -94,10 +113,10 @@ void Socket::ProcessEpollOut(int sock_fd, void* client_data) {
       break;
     } else {
       // continue;
-      s->GetOutBuff().PopFront(rc);
+      s->WriteBuff().PopFront(rc);
     }
   }
-  GetGlobalEpoll()->DelEvent(s->GetFD(), IOMaskWrite);
+  GetGlobalEpoll()->DelEvent(s->fd_, IOMaskWrite);
 }
 
 int Socket::ReadUntilFail(int* saved_errno) {
@@ -130,7 +149,7 @@ int Socket::WriteNoBuff(const char* data, int sz) {
 
 int Socket::ConnectIfNot() {
   if (fd_ > 0) {
-    status_ = Status::Connected;
+    status_ = Status::CONNECTED;
     return 0;
   }
   struct sockaddr_in peer_addr;
@@ -140,7 +159,7 @@ int Socket::ConnectIfNot() {
   }
   while (true) {
     if (connect(fd_, (struct sockaddr*)&peer_addr, sizeof(peer_addr)) == 0) {
-      status_ = Status::Connected;
+      status_ = Status::CONNECTED;
       return 0;
     } else {
       if (errno == EINTR) {
@@ -151,7 +170,7 @@ int Socket::ConnectIfNot() {
         if (GetGlobalEpoll()->AddWriteEvent(fd_, this) < 0) {
           return -1;
         }
-        status_ = Status::Connecting;
+        status_ = Status::CONNECTING;
         // TODO:what if connect timeout?
         return 0;
       } else {
@@ -164,8 +183,8 @@ int Socket::ConnectIfNot() {
 
 int Socket::InitSock(const Peer& peer, struct sockaddr_in* peer_addr) {
   peer_addr->sin_family = AF_INET;
-  peer_addr->sin_port = htons(peer.port());
-  if (inet_aton(peer.ip().c_str(), &peer_addr->sin_addr) != 1) {
+  peer_addr->sin_port = htons(peer.port);
+  if (inet_aton(peer.ip.c_str(), &peer_addr->sin_addr) != 1) {
     VLOG(1) << "Bad ip?";
     return -1;
   }
@@ -187,14 +206,14 @@ int Socket::InitSock(const Peer& peer, struct sockaddr_in* peer_addr) {
 
 #define StatusCase(st) \
   case Status::st : return #st
-const std::string Socket::StatusToString(enum Status st) {
-  switch (st) {
+const std::string Socket::StatusToString() {
+  switch (status_) {
     StatusCase(IDLE);
     StatusCase(KEEP_WRITE);
     StatusCase(ERROR);
     StatusCase(FAIL_CONNECT);
-    StatusCase(Connecting);
-    StatusCase(Connected);
+    StatusCase(CONNECTING);
+    StatusCase(CONNECTED);
     default:
       return "UNKNOWN";
   }
