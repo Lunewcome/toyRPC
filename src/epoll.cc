@@ -11,16 +11,12 @@
 static constexpr int32_t kEpollWaitTimeout = -1;
 static constexpr int32_t kMaxWaitingEvents = 1024;
 
-Epoll global_epl;
-Epoll* GetGlobalEpoll() {
-  return &global_epl;
-}
-
 Epoll::Epoll() {
   epoll_fd_.Reset(epoll_create(kMaxWaitingEvents));
   if (epoll_fd_() < 0) {
     throw(std::bad_alloc());
   }
+  // epoll_fd_ is exception safe.
   epoll_events_ = new struct epoll_event[kMaxWaitingEvents];
   events_.emplace_back();
 }
@@ -83,4 +79,9 @@ int Epoll::DelEvent(int fd, IOMask mask) {
     events_[fd].Reset();
   }
   return epoll_ctl(epoll_fd_(), op, fd, &epoll_event);
+}
+
+Epoll global_epl;
+Epoll* GetGlobalEpoll() {
+  return &global_epl;
 }
